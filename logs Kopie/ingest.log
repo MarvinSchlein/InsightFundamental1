@@ -1,0 +1,6 @@
+❌ ERROR: NEWSAPI_KEY ist nicht gesetzt. Bitte lege ihn mit
+   export NEWSAPI_KEY="dein_key"
+in deiner Shell ab und lade dein Profil neu (z.B. `source ~/.zshrc`).
+❌ ERROR: NEWSAPI_KEY ist nicht gesetzt. Bitte lege ihn mit
+   export NEWSAPI_KEY="dein_key"
+in deiner Shell ab und lade dein Profil neu (z.B. `source ~/.zshrc`).
