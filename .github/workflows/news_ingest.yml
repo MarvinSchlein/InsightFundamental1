@@ -28,6 +28,8 @@ jobs:
           fi
 
       - name: Run news_ingest.py
+        env:
+          NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
         run: python news_ingest.py
 
       - name: Commit & push updated CSV
