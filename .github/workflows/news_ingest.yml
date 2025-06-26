@@ -28,13 +28,11 @@ jobs:
           fi
 
       - name: Run news_ingest.py
-        env:
-          NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
         run: python news_ingest.py
 
-   - name: Commit & push updated CSV
-     uses: stefanzweifel/git-auto-commit-action@v4
-     with:
-       token:         ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
-       commit_message: "chore: hourly news ingestion"
-       file_pattern:  "data Kopie/news_analysis_results.csv"
+      - name: Commit & push updated CSV
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          token:         ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
+          commit_message: "chore: hourly news ingestion"
+          file_pattern:  "data Kopie/news_analysis_results.csv"
