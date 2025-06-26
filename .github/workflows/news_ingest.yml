@@ -32,10 +32,9 @@ jobs:
           NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
         run: python news_ingest.py
 
-      - name: Commit & push updated CSV
+           - name: Commit & push updated CSV
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          # hier dein Fine-grained Personal Access Token
-          github_token: ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
+          token:         ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
           commit_message: "chore: hourly news ingestion"
           file_pattern: "frontend/data/news_analysis_results.csv"
