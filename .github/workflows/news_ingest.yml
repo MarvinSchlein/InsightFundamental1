@@ -9,6 +9,10 @@ on:
 
 jobs:
   ingest:
+    # Erlaube dem integrierten GITHUB_TOKEN, in dein Repo zu schreiben
+    permissions:
+      contents: write
+
     runs-on: ubuntu-latest
 
     steps:
@@ -35,6 +39,5 @@ jobs:
       - name: Commit & push updated CSV
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          token:         ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
           commit_message: "chore: hourly news ingestion"
-          file_pattern:  "data Kopie/news_analysis_results.csv"
+          file_pattern:      "data Kopie/news_analysis_results.csv"
