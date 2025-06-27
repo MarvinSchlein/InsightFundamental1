@@ -36,6 +36,11 @@ jobs:
           NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
         run: python news_ingest.py
 
+      - name: Debug: show CSV head
+        run: |
+          echo "=== Inhalt der CSV nach Ingestion ==="
+          head -n 10 "data Kopie/news_analysis_results.csv"
+
       - name: Commit & push updated CSV
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
