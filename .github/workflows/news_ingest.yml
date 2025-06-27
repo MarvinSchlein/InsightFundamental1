@@ -33,7 +33,7 @@ jobs:
       - name: Run news_ingest.py
         env:
           NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
-        run: python backend/news_ingest.py
+        run: python backend Kopie/news_ingest.py
 
 
       - name: Commit & push updated CSV
