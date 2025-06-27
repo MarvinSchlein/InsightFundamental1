@@ -35,11 +35,6 @@ jobs:
           NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
         run: python backend/news_ingest.py
 
-      - name: Debug: show CSV head
-        run: |
-          echo "=== Inhalt der CSV nach Ingestion ==="
-          ls -l frontend/data/news_analysis_results.csv || true
-          head -n 10 frontend/data/news_analysis_results.csv || true
 
       - name: Commit & push updated CSV
         uses: stefanzweifel/git-auto-commit-action@v4
