@@ -9,10 +9,8 @@ on:
 
 jobs:
   ingest:
-    # Erlaube dem integrierten GITHUB_TOKEN, in dein Repo zu schreiben
     permissions:
       contents: write
-
     runs-on: ubuntu-latest
 
     steps:
@@ -27,6 +25,7 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
+          pip install requests
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
