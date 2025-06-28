@@ -15,7 +15,7 @@ if not API_KEY:
     exit(1)
 
 # Pfad zum Frontend-Datenordner
-DATA_DIR = Path(__file__).parent.parent / "frontend" / "data"
+DATA_DIR = Path(__file__).parent.parent / "frontend Kopie" / "data Kopie"
 OUTPUT   = DATA_DIR / "news_analysis_results.csv"
 
 # === 2) Artikel holen ===
