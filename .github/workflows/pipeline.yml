@@ -37,7 +37,7 @@ jobs:
       - name: Analyze with ChatGPT
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python "backend Kopie/analyze_news.py"
+        run: python "backend Kopie/batch_analyze.py"
 
       - name: Commit & push results
         uses: stefanzweifel/git-auto-commit-action@v4
