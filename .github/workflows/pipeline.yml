@@ -47,7 +47,16 @@ jobs:
             "frontend Kopie/data/news_analysis_results.csv"
             "backend Kopie/data/analysis.json"
 
-      - name: Deploy website
+      # ─────────── Neuer Block für GitHub Pages ───────────
+      - name: Prepare docs/ for GitHub Pages
         run: |
-          npm install -g netlify-cli
-          netlify deploy --prod --dir=public --auth ${{ secrets.NETLIFY_TOKEN }}
+          rm -rf docs
+          mkdir docs
+          cp -R "frontend Kopie/"* docs/
+          touch docs/.nojekyll
+
+      - name: Commit & push docs for Pages
+        uses: stefanzweifel/git-auto-commit-action@v4
+        with:
+          commit_message: "chore: update docs for GitHub Pages"
+          file_pattern: "docs/**"
