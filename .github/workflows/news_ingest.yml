@@ -1,11 +1,12 @@
 # .github/workflows/news_ingest.yml
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
+
 name: 📰 News-Ingestion
 
 on:
   schedule:
     - cron: '0 * * * *'
-    workflow_dispatch: {}
+  workflow_dispatch:
 
 jobs:
   ingest:
@@ -17,15 +18,15 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v3
 
-   - name: Set up Python
-     uses: actions/setup-python@v4
-     with:
-       python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install requests
+          pip install requests openai pandas python-dotenv
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
@@ -33,11 +34,12 @@ jobs:
       - name: Run news_ingest.py
         env:
           NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
-        run: python news_ingest.py
-
+        run: python backend/news_ingest.py
 
       - name: Commit & push updated CSV
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          commit_message: "chore: hourly news ingestion"
-          file_pattern: "frontend/data/news_analysis_results.csv"
+          commit_message: "chore: ingest news"
+          file_pattern: |
+            data/latest_news.csv
+            data/news_analysis_results.csv
