@@ -31,6 +31,6 @@ jobs:
           fi
 
       - name: Run news_ingest.py
-  env:
-    NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
-  run: python InsightFundamental/backend/news_ingest.py
+        env:
+          NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
+        run: python InsightFundamental/backend/news_ingest.py
