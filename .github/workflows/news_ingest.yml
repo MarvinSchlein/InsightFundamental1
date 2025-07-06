@@ -30,7 +30,7 @@ jobs:
             pip install -r requirements.txt
           fi
 
-            - name: Run news_ingest.py
+      - name: Run news_ingest.py
         env:
           NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
         run: python "backend Kopie/news_ingest.py"
