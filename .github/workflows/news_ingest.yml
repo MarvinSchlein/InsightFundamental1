@@ -1,7 +1,7 @@
 # .github/workflows/news_ingest.yml
 # yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
 
-name: 📰 News-Ingestion
+name: "📰 News-Ingestion"
 
 on:
   schedule:
@@ -26,22 +26,12 @@ jobs:
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install requests openai pandas python-dotenv
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
 
-    - name: Run news_ingest.py
-      # in das Unterverzeichnis wechseln
-      working-directory: InsightFundamental  
-      env:
-        NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
-      run: python backend/news_ingest.py
-
-      - name: Commit & push updated CSV
-        uses: stefanzweifel/git-auto-commit-action@v4
-        with:
-          commit_message: "chore: ingest news"
-          file_pattern: |
-            data/latest_news.csv
-            data/news_analysis_results.csv
+      - name: Run news_ingest.py
+        working-directory: InsightFundamental         # ← falls Dein Script in diesem Unterordner liegt
+        env:
+          NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
+        run: python backend/news_ingest.py
