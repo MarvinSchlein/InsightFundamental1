@@ -6,650 +6,1688 @@ import hashlib
 import json
 import yfinance as yf
 import streamlit.components.v1 as components
+import numpy as np
+import requests
+import os
 
-# === Nachrichten laden GANZ OBEN! ===
-data_file = Path("data/news_analysis_results.csv")
-df = pd.read_csv(data_file) if data_file.exists() else pd.DataFrame()
+# === Konfiguration ===
 
 st.set_page_config(page_title="InsightFundamental", layout="wide")
 
-# === Nutzerverwaltung ===
+# === Text Content (English as default) ===
+
+TEXTS = {
+"en": {
+# Navigation
+"home": "Home",
+"news_analysis": "News Analysis",
+"features": "Features",
+"login": "Login",
+"register": "Register",
+"logout": "Logout",
+"free_trial": "Start 14-day free trial now!",
+
+```
+    # Landing Page
+    "hero_title": "Make informed investment decisions easily.",
+    "hero_subtitle": "Discover the future of market understanding with AI-powered analysis of economic and political news in real-time.",
+    "discover_features": "Discover Features",
+    "why_insight": "Why InsightFundamental?",
+    "start_free": "Start for free now",
+
+    # Features
+    "impact_score": "Impact Score",
+    "impact_score_desc": "Our AI automatically evaluates the potential impact of each news item on important markets and gives you a clear impact score from -10 to 10.",
+    "affected_markets": "Affected Markets",
+    "affected_markets_desc": "Instantly identify which indices, sectors, countries or currencies are affected by a news item.",
+    "historical_patterns": "Historical Patterns",
+    "historical_patterns_desc": "Compare current developments with similar historical events and their market impacts.",
+    "confidence_level": "Confidence Level",
+    "confidence_level_desc": "Get an assessment of how reliable our AI analysis is - from 'high' to 'low' confidence.",
+
+    # Benefits
+    "your_benefits": "Your Benefits",
+    "better_decisions": "Better Investment Decisions",
+    "better_decisions_desc": "Understand the true drivers behind market movements and make more informed investment decisions.",
+    "time_saving": "Time Saving",
+    "time_saving_desc": "Save hours of research – our AI analyzes and evaluates news in seconds.",
+    "always_informed": "Always Informed",
+    "always_informed_desc": "Stay informed about market developments and increase your knowledge of economics and politics.",
+    "focused_info": "Focused Information",
+    "focused_info_desc": "Focus on what matters – we filter out the most important news for you.",
+
+    # Login/Register
+    "login_title": "Login",
+    "email": "Email",
+    "password": "Password",
+    "confirm_password": "Confirm Password",
+    "stay_logged_in": "Stay logged in",
+    "login_button": "Login",
+    "forgot_password": "Forgot password?",
+    "register_title": "Register",
+    "accept_terms": "I accept the terms and conditions",
+    "register_button": "Register",
+    "invalid_credentials": "Invalid credentials",
+    "email_already_registered": "Email is already registered",
+    "passwords_dont_match": "Passwords don't match",
+    "accept_terms_error": "Please accept the terms and conditions.",
+
+    # Password Reset
+    "reset_password": "Reset Password",
+    "reset_password_desc": "Please enter your email address",
+    "request_reset": "Request Reset Link",
+    "reset_sent": "If the email exists, a reset link has been sent.",
+    "new_password": "Set New Password",
+    "save_password": "Save Password",
+    "password_too_short": "Password too short.",
+    "password_changed": "Password successfully changed. You can now log in.",
+    "password_saved": "Password successfully changed.",
+    "to_login": "To Login",
+    "invalid_link": "Invalid or expired link.",
+
+    # Dashboard
+    "user_settings": "User Settings",
+    "profile": "Profile",
+    "subscription": "Subscription",
+    "support": "Support",
+    "change_password": "Change Password",
+    "save_password_dash": "Save Password",
+    "cancel_subscription": "Cancel Subscription",
+    "subscription_cancelled": "Your subscription has been cancelled.",
+    "subscription_already_cancelled": "Your subscription is already cancelled.",
+    "subject": "Subject",
+    "message": "Message",
+    "send": "Send",
+    "fill_all_fields": "Please fill in subject and message.",
+    "message_sent": "Your message has been sent successfully. We'll get back to you soon!",
+
+    # Status
+    "active": "Active",
+    "trial": "Trial",
+    "cancelled": "Cancelled",
+    "unknown": "Unknown",
+    "status": "Status:",
+
+    # News
+    "filter": "Filter",
+    "impact_score_filter": "Impact Score",
+    "confidence_level_filter": "Confidence Level",
+    "confidence_high": "High",
+    "confidence_medium": "Medium",
+    "confidence_low": "Low",
+    "no_news": "No news available.",
+    "learn_more": "Learn More",
+    "historical_patterns_news": "Historical Patterns:",
+    "analysis": "Analysis:",
+
+    # Features Page
+    "features_detail": "Features in Detail",
+    "features_subtitle": "Discover all possibilities of InsightFundamental and how they help you make better investment decisions",
+    "ready_to_test": "Ready to Test?",
+    "ready_to_test_desc": "Start today with InsightFundamental and experience the future of market analysis.",
+    "start_trial": "Start 14-day free trial",
+    "continue_later": "Continue Later",
+
+    # Language Selection
+    "language": "Language",
+    "german": "Deutsch",
+    "english": "English"
+},
+"de": {
+    # Navigation
+    "home": "Startseite",
+    "news_analysis": "Nachrichtenanalyse",
+    "features": "Funktionen",
+    "login": "Anmelden",
+    "register": "Registrieren",
+    "logout": "Abmelden",
+    "free_trial": "Jetzt 14 Tage kostenlos testen!",
+    # Landing Page
+    "hero_title": "Treffe fundierte Investment-Entscheidungen einfach.",
+    "hero_subtitle": "Entdecke die Zukunft des Marktverständnisses mit KI-gestützter Analyse von Wirtschafts- und Politiknachrichten in Echtzeit.",
+    "discover_features": "Funktionen entdecken",
+    "why_insight": "Warum InsightFundamental?",
+    "start_free": "Jetzt kostenlos starten",
+    # Features
+    "impact_score": "Impact Score",
+    "impact_score_desc": "Unsere KI bewertet automatisch die potenzielle Auswirkung jeder Nachricht auf wichtige Märkte und gibt dir einen klaren Impact Score von -10 bis 10.",
+    "affected_markets": "Betroffene Märkte",
+    "affected_markets_desc": "Erkenne sofort, welche Indizes, Sektoren, Länder oder Währungen von einer Nachricht betroffen sind.",
+    "historical_patterns": "Historische Muster",
+    "historical_patterns_desc": "Vergleiche aktuelle Entwicklungen mit ähnlichen historischen Ereignissen und deren Marktauswirkungen.",
+    "confidence_level": "Confidence Level",
+    "confidence_level_desc": "Erhalte eine Einschätzung, wie zuverlässig unsere KI-Analyse ist – von 'hoch' bis 'niedrig'.",
+    # Benefits
+    "your_benefits": "Deine Vorteile",
+    "better_decisions": "Bessere Investment-Entscheidungen",
+    "better_decisions_desc": "Verstehe die wahren Treiber hinter Marktbewegungen und triff fundiertere Investment-Entscheidungen.",
+    "time_saving": "Zeitersparnis",
+    "time_saving_desc": "Spare Stunden an Recherche – unsere KI analysiert und bewertet Nachrichten in Sekunden.",
+    "always_informed": "Immer informiert",
+    "always_informed_desc": "Bleibe über Marktgeschehen informiert und erweitere dein Wissen über Wirtschaft und Politik.",
+    "focused_info": "Fokussierte Informationen",
+    "focused_info_desc": "Konzentriere dich auf das Wesentliche – wir filtern die wichtigsten Nachrichten für dich heraus.",
+    # Login/Register
+    "login_title": "Anmelden",
+    "email": "E-Mail",
+    "password": "Passwort",
+    "confirm_password": "Passwort bestätigen",
+    "stay_logged_in": "Angemeldet bleiben",
+    "login_button": "Anmelden",
+    "forgot_password": "Passwort vergessen?",
+    "register_title": "Registrieren",
+    "accept_terms": "Ich akzeptiere die AGB",
+    "register_button": "Registrieren",
+    "invalid_credentials": "Ungültige Zugangsdaten",
+    "email_already_registered": "E-Mail ist bereits registriert",
+    "passwords_dont_match": "Passwörter stimmen nicht überein",
+    "accept_terms_error": "Bitte akzeptiere die AGB.",
+    # Password Reset
+    "reset_password": "Passwort zurücksetzen",
+    "reset_password_desc": "Bitte gib deine E-Mail-Adresse ein",
+    "request_reset": "Reset-Link anfordern",
+    "reset_sent": "Falls die E-Mail existiert, wurde ein Reset-Link versendet.",
+    "new_password": "Neues Passwort setzen",
+    "save_password": "Passwort speichern",
+    "password_too_short": "Passwort zu kurz.",
+    "password_changed": "Passwort erfolgreich geändert. Du kannst dich jetzt anmelden.",
+    "password_saved": "Passwort erfolgreich geändert.",
+    "to_login": "Zum Login",
+    "invalid_link": "Ungültiger oder abgelaufener Link.",
+    # Dashboard
+    "user_settings": "Nutzereinstellungen",
+    "profile": "Profil",
+    "subscription": "Abo",
+    "support": "Support",
+    "change_password": "Passwort ändern",
+    "save_password_dash": "Passwort speichern",
+    "cancel_subscription": "Abo kündigen",
+    "subscription_cancelled": "Dein Abo wurde gekündigt.",
+    "subscription_already_cancelled": "Dein Abo ist bereits gekündigt.",
+    "subject": "Betreff",
+    "message": "Nachricht",
+    "send": "Senden",
+    "fill_all_fields": "Bitte Betreff und Nachricht ausfüllen.",
+    "message_sent": "Deine Nachricht wurde erfolgreich gesendet. Wir melden uns bald!",
+    # Status
+    "active": "Aktiv",
+    "trial": "Testphase",
+    "cancelled": "Gekündigt",
+    "unknown": "Unbekannt",
+    "status": "Status:",
+    # News
+    "filter": "Filter",
+    "impact_score_filter": "Impact Score",
+    "confidence_level_filter": "Confidence Level",
+    "confidence_high": "Hoch",
+    "confidence_medium": "Mittel",
+    "confidence_low": "Niedrig",
+    "no_news": "Keine Nachrichten verfügbar.",
+    "learn_more": "Mehr erfahren",
+    "historical_patterns_news": "Historische Muster:",
+    "analysis": "Analyse:",
+    # Features Page
+    "features_detail": "Funktionen im Detail",
+    "features_subtitle": "Entdecke alle Möglichkeiten von InsightFundamental und wie sie dir helfen, bessere Investment-Entscheidungen zu treffen",
+    "ready_to_test": "Bereit zum Testen?",
+    "ready_to_test_desc": "Starte heute mit InsightFundamental und erlebe die Zukunft der Marktanalyse.",
+    "start_trial": "14 Tage kostenlos testen",
+    "continue_later": "Später fortfahren",
+    # Language Selection
+    "language": "Sprache",
+    "german": "Deutsch",
+    "english": "Englisch"
+}
+
+```
+
+}
+
+def get_text(key: str) -> str:
+"""Gets the translated text for the given key"""
+lang = SESSION.get("language", "en")
+return TEXTS.get(lang, TEXTS["en"]).get(key, key)
+
+# === Session & Nutzerverwaltung ===
+
 USER_FILE = Path("data/users.json")
-USER_FILE.parent.mkdir(parents=True, exist_ok=True)
+USER_FILE.parent.mkdir(exist_ok=True, parents=True)
 if not USER_FILE.exists():
-    USER_FILE.write_text(json.dumps({}))
+USER_FILE.write_text(json.dumps({}))
 
 SESSION = st.session_state
 if "logged_in" not in SESSION:
-    SESSION.logged_in = False
-    SESSION.username = ""
-if "dashboard_tab" not in SESSION:
-    SESSION.dashboard_tab = "Profil"
+SESSION.logged_in = False
+SESSION.username = ""
 if "user_plan" not in SESSION:
-    SESSION.user_plan = "Standard"
+SESSION.user_plan = None  # nur zahlende Nutzer
+if "language" not in SESSION:
+SESSION.language = "en"  # Default language English
 
-def redirect_to(view: str):
-    st.query_params = {"view": [view]}
+# Hilfsfunktionen
 
 def save_users(users: dict):
-    USER_FILE.write_text(json.dumps(users))
+USER_FILE.write_text(json.dumps(users))
 
-# === CSS ===
+def redirect_to(view: str):
+st.experimental_set_query_params(view=[view])
+
+# === SMTP-Konfiguration für Passwort-Reset ===
+
+# Gmail SMTP-Einstellungen (für Test):
+
+SMTP_SERVER = "[smtp.gmail.com](http://smtp.gmail.com/)"  # Gmail SMTP-Server
+SMTP_PORT = 587  # Port für TLS
+SMTP_USER = "[schleinmarvin@gmail.com](mailto:schleinmarvin@gmail.com)"  # Deine Gmail-Adresse
+SMTP_PASSWORD = "DEIN_GMAIL_APP_PASSWORT"  # Gmail App-Passwort (nicht normales Passwort!)
+ABSENDER = "[schleinmarvin@gmail.com](mailto:schleinmarvin@gmail.com)"
+
+RESET_TOKEN_FILE = Path("data/reset_tokens.json")
+RESET_TOKEN_FILE.parent.mkdir(exist_ok=True, parents=True)
+if not RESET_TOKEN_FILE.exists():
+RESET_TOKEN_FILE.write_text(json.dumps({}))
+
+def generate_reset_token(email, expires_in=3600):
+import secrets, time
+token = secrets.token_urlsafe(32)
+tokens = json.loads(RESET_TOKEN_FILE.read_text())
+tokens[token] = {"email": email, "expires": time.time() + expires_in}
+RESET_TOKEN_FILE.write_text(json.dumps(tokens))
+return token
+
+def verify_reset_token(token):
+import time
+tokens = json.loads(RESET_TOKEN_FILE.read_text())
+data = tokens.get(token)
+if not data:
+return None
+if time.time() > data["expires"]:
+del tokens[token]
+RESET_TOKEN_FILE.write_text(json.dumps(tokens))
+return None
+return data["email"]
+
+def delete_reset_token(token):
+tokens = json.loads(RESET_TOKEN_FILE.read_text())
+if token in tokens:
+del tokens[token]
+RESET_TOKEN_FILE.write_text(json.dumps(tokens))
+
+def send_reset_email(email, token):
+import smtplib
+from email.mime.text import MIMEText
+
+```
+# Hier die URL deiner App anpassen:
+app_url = "<https://insightfundamental.com>"  # Deine echte Domain
+reset_link = f"{app_url}/?view=reset_password&token={token}"
+
+msg = MIMEText(f"""Hello,
+
+```
+
+you have requested to reset your password.
+
+Click on the following link to set a new password:
+{reset_link}
+
+This link is valid for 1 hour.
+
+If you did not make this request, you can ignore this email.
+
+Best regards
+Your InsightFundamental Team""")
+
+```
+msg["Subject"] = "Reset Password - InsightFundamental"
+msg["From"] = ABSENDER
+msg["To"] = email
+
+try:
+    if SMTP_PORT == 465:
+        # SSL-Verbindung
+        with smtplib.SMTP_SSL(SMTP_SERVER, SMTP_PORT) as server:
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(ABSENDER, [email], msg.as_string())
+    else:
+        # TLS-Verbindung
+        with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+            server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.sendmail(ABSENDER, [email], msg.as_string())
+    print(f"Reset-E-Mail erfolgreich an {email} gesendet")
+    print(f"Von: {ABSENDER}")
+    print(f"An: {email}")
+    print(f"Link: {reset_link}")
+except Exception as e:
+    print(f"Fehler beim Senden der E-Mail: {e}")
+    print(f"SMTP Server: {SMTP_SERVER}:{SMTP_PORT}")
+    print(f"SMTP User: {SMTP_USER}")
+    raise e
+
+```
+
+# === Globales CSS inklusive Landing-Page & Dark-Sidebar ===
+
 st.markdown("""
-    <style>
-      html, body, .main, .block-container { background: #fff; color: #000; font-family: Georgia, serif; }
-      h1, h2, h3 { color: #0b2545; margin: 0; }
-      .timestamp { color: #555; font-size: .9em; }
-      input[data-baseweb="input"], input[type="text"], input[type="password"] {
-        background:#fff !important;
-        border:2px solid #0b2545 !important;
-        border-radius:6px;
-        padding:8px 12px;
-        font-size:16px;
-        color:#000 !important;
-        width:50% !important;   /* Größere Eingabefelder für alle gleich! */
-        min-width: 300px !important;
-      }
-      section[data-testid="stSidebar"] input[data-baseweb="input"], 
-      section[data-testid="stSidebar"] input[type="text"], 
-      section[data-testid="stSidebar"] input[type="password"] {
-        background:#0b2545 !important;
-        border:2px solid #fff !important;
-        border-radius:6px;
-        color:#fff !important;
-        width:98% !important;
-        font-size:16px;
-        padding:8px 12px;
-      }
-      section[data-testid="stSidebar"] label, 
-      section[data-testid="stSidebar"] .stTextInput label {
-        color: #fff !important;
-      }
-      .stTextInput > div,
-      .stTextInput > div > div {
-        background: #fff !important;
-        border: none !important;
-      }
-      form label, .stTextInput label { color: #0b2545 !important; }
-      ::placeholder { color:#0b2545 !important; opacity:1 !important; }
-      .impact-bullish { color:green; font-weight:bold; }
-      .impact-bearish { color:red; font-weight:bold; }
-      .impact-neutral { color:black; font-weight:bold; }
-      .market-box { border:2px solid #0b2545; border-radius:6px; padding:8px; text-align:center; }
-      button, div.stButton > button, form button, input[type="submit"] {
-        background-color: #0b2545 !important;
-        color: white !important;
-        border: none !important;
-        border-radius: 4px !important;
-        padding: 6px 12px !important;
-        font-size: 16px !important;
-        cursor: pointer !important;
-        white-space: nowrap !important; /* EINZEILIG */
-      }
-      section[data-testid="stSidebar"] {
-        background: #0b2445 !important;
-        color: #fff !important;
-      }
-      .dashboard-btn {
-        font-size:22px;
-        font-weight:bold;
-        color:#fff !important;
-        padding:15px 22px;
-        margin:6px 16px 6px 16px;
-        border-radius:10px;
-        background: transparent;
-        cursor:pointer;
-        border: none;
-        text-align:left;
-        transition: background 0.16s;
-        outline: none !important;
-        display: block;
-        width: 100%;
-      }
-      .dashboard-btn.active {
-        background: #1b325c;
-        border-radius: 10px;
-      }
-      .current-tab {
-        font-size: 26px;
-        font-weight: bold;
-        color: #fff !important;
-        margin-bottom: 18px;
-        text-align: center;
-        letter-spacing:1px;
-      }
-    </style>
+<style>
+/* Grundlayout */
+html, body, .main, .block-container { background: #fff; color: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+h1,h2,h3 { color: #0b2545; margin: 0; }
+
+/* Landing-Page Hintergrund-Gradient */
+.stApp { background: linear-gradient(135deg, #0b2545 0%, #1b325c 50%, #2a4a7a 100%); }
+
+/* Dark Sidebar + weiße Schrift */
+section[data-testid="stSidebar"] { background: #0b2545 !important; color: #fff !important; }
+section[data-testid="stSidebar"] * { color: #fff !important; }
+
+/* Buttons einheitlich - Standard Streamlit Button Style */
+button, .stButton>button { background: #0b2545 !important; color: #fff !important; border:none!important; border-radius:8px!important; padding:8px 16px!important; font-weight:600!important; }
+input, textarea {
+background: #fff !important;
+border: 2px solid #0b2545 !important;
+border-radius: 8px !important;
+color: #0b2545 !important;
+}
+
+label, .stTextInput label, .stCheckbox span, .st-bb, .st-c6, .st-c7 {
+color: #0b2545 !important;
+font-weight: 600;
+}
+
+/* Input-Feld rechts ohne Rand und ohne Border-Radius, wenn Button daneben */
+.stTextInput>div>div>input[type="password"] {
+border-right: none !important;
+border-top-right-radius: 0 !important;
+border-bottom-right-radius: 0 !important;
+margin-right: 0 !important;
+padding-right: 0 !important;
+}
+/* Button ohne eigenen Rand, nur rechts Border-Radius */
+button[title="Passwort anzeigen"], button[title="Passwort ausblenden"], .stTextInput button {
+background: #fff !important;
+border-top: 2px solid #0b2545 !important;
+border-right: 2px solid #0b2545 !important;
+border-bottom: 2px solid #0b2545 !important;
+border-left: none !important;
+border-radius: 0 8px 8px 0 !important;
+box-shadow: none !important;
+margin: 0 !important;
+padding: 0.2em 0.5em !important;
+position: static !important;
+z-index: 2;
+}
+button[title="Passwort anzeigen"]:hover, button[title="Passwort ausblenden"]:hover, .stTextInput button:hover {
+background: #fff !important;
+border: none !important;
+box-shadow: none !important;
+}
+button[title="Passwort anzeigen"] svg, button[title="Passwort ausblenden"] svg, .stTextInput button svg {
+color: #0b2545 !important;
+fill: #0b2545 !important;
+}
+/* Umgebende Container des Passwort-Buttons weiß färben */
+.stTextInput, .stTextInput>div, .stTextInput>div>div, .stTextInput>div>div>button, .stTextInput>div>div>button>div {
+background: #fff !important;
+box-shadow: none !important;
+border: none !important;
+margin: 0 !important;
+padding: 0 !important;
+}
+/* Button exakt an das Input-Feld kleben */
+button[title="Passwort anzeigen"], button[title="Passwort ausblenden"], .stTextInput button {
+position: relative !important;
+left: 0 !important;
+margin-left: -4px !important;
+z-index: 2;
+}
+
+/* Header-Navigation */
+.header-nav { display:flex; align-items:center; justify-content:space-between; padding:1rem 2rem; background:rgba(11,37,69,0.9); backdrop-filter:blur(10px); border-radius:0 0 15px 15px; }
+.header-nav h1 { font-size:2.4em; color:#fff; font-weight:700; }
+.header-nav a { margin-left:1.5rem; color:#fff; text-decoration:none; font-weight:600; transition:all 0.3s ease; }
+.header-nav a:hover { color:#4a9eff; transform:translateY(-2px); }
+/* Header Button Style - einheitlich mit Standard Streamlit Buttons */
+.header-nav a.button {
+background: #0b2545 !important;
+color: #fff !important;
+border: 2px solid #0b2545 !important;
+border-radius: 25px !important;
+font-weight: 700;
+box-shadow: none !important;
+padding: 1rem 2rem !important;
+}
+.header-nav a.button:hover {
+background: #1b325c !important;
+color: #fff !important;
+box-shadow: 0 6px 20px rgba(11,37,69,0.4) !important;
+}
+
+/* Landing-Hero */
+.landing-hero { text-align:center; color:#fff; padding:6rem 2rem; }
+.landing-hero h2 { font-size:4em; margin-bottom:1rem; font-weight:800; background:linear-gradient(45deg, #fff, #4a9eff); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+.landing-hero p { font-size:1.4em; margin-bottom:2rem; line-height:1.6; opacity:0.9; }
+.hero-buttons { display:flex; gap:1rem; justify-content:center; margin-top:2rem; }
+.hero-buttons a { display:inline-block; padding:1rem 2rem; border-radius:30px; text-decoration:none; font-weight:600; transition:all 0.3s ease; }
+.hero-buttons .primary { background:#0b2545; color:#fff; box-shadow:0 6px 20px rgba(11,37,69,0.4); }
+.hero-buttons .secondary { background:rgba(255,255,255,0.1); color:#fff; border:2px solid rgba(255,255,255,0.3); backdrop-filter:blur(10px); }
+.hero-buttons a:hover { transform:translateY(-3px); box-shadow:0 8px 25px rgba(11,37,69,0.5); }
+
+/* Features Section */
+.features-section { padding:4rem 2rem; background:rgba(255,255,255,0.05); backdrop-filter:blur(10px); margin:2rem 0; border-radius:20px; }
+.features-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:2rem; margin-top:3rem; }
+.feature-card { background:rgba(255,255,255,0.1); padding:2rem; border-radius:15px; backdrop-filter:blur(10px); border:1px solid rgba(255,255,255,0.2); transition:all 0.3s ease; }
+.feature-card:hover { transform:translateY(-5px); background:rgba(255,255,255,0.15); }
+.feature-icon { font-size:3em; margin-bottom:1rem; }
+.feature-card h3 { color:#4a9eff; font-size:1.5em; margin-bottom:1rem; }
+.feature-card p { color:#fff; opacity:0.9; line-height:1.6; }
+
+/* Benefits Section */
+.benefits-section { padding:4rem 2rem; }
+.benefit-item { display:flex; align-items:center; margin:2rem 0; padding:1.5rem; background:rgba(255,255,255,0.05); border-radius:15px; backdrop-filter:blur(10px); }
+.benefit-icon { font-size:2.5em; margin-right:1.5rem; color:#4a9eff; }
+.benefit-text h4 { color:#fff; font-size:1.3em; margin-bottom:0.5rem; }
+.benefit-text p { color:#fff; opacity:0.8; }
+
+/* CTA Section */
+.cta-section { text-align:center; padding:4rem 2rem; background:linear-gradient(45deg, rgba(74,158,255,0.2), rgba(107,182,255,0.2)); border-radius:20px; margin:2rem 0; }
+.cta-section h3 { color:#fff; font-size:2.5em; margin-bottom:1rem; }
+.cta-section p { color:#fff; font-size:1.2em; margin-bottom:2rem; opacity:0.9; }
+
+/* Markt-Boxen */
+.market-box { border:2px solid #0b2545; border-radius:8px; padding:12px; text-align:center; }
+
+/* Hintergrund-Gradient auf den gesamten App-Container anwenden */
+section[data-testid="stAppViewContainer"] > div:first-child {
+background: linear-gradient(135deg, #0b2545 0%, #1b325c 50%, #2a4a7a 100%) !important;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+.landing-hero h2 { font-size:2.5em; }
+.hero-buttons { flex-direction:column; align-items:center; }
+.features-grid { grid-template-columns:1fr; }
+.header-nav { flex-direction:column; gap:1rem; }
+}
+
+/* Eltern-Container des Input-Feldes und Buttons anpassen */
+.stTextInput>div, .stTextInput>div>div, .stTextInput>div>div>div {
+background: #fff !important;
+margin: 0 !important;
+padding: 0 !important;
+box-shadow: none !important;
+}
+/* Button leicht nach links schieben, um Lücke zu überdecken */
+button[title="Passwort anzeigen"], button[title="Passwort ausblenden"], .stTextInput button {
+margin-left: -2px !important;
+}
+/* Button mit Auge nahtlos im Input-Feld, ohne eigenen Rand/Hintergrund */
+.stTextInput {
+position: static !important;
+}
+button[title="Passwort anzeigen"], button[title="Passwort ausblenden"], .stTextInput button {
+background: #fff !important;
+border: none !important;
+border-radius: 0 8px 8px 0 !important;
+box-shadow: none !important;
+margin-left: 12px !important;
+padding: 0.2em 0.5em !important;
+position: static !important;
+z-index: 2;
+}
+button[title="Passwort anzeigen"] svg, button[title="Passwort ausblenden"] svg, .stTextInput button svg {
+color: #0b2545 !important;
+fill: #0b2545 !important;
+}
+.stTextInput input[type="password"] {
+width: calc(100% - 40px) !important; /* etwas schmaler, damit das Auge Platz hat */
+padding-right: 0.5em !important;
+box-sizing: border-box !important;
+}
+/* Passwortfeld und Auge-Icon: saubere, einheitliche Darstellung */
+.stTextInput>div>div>input[type="password"] {
+width: calc(100% - 38px) !important;
+border-right: none !important;
+border-radius: 8px 0 0 8px !important;
+margin: 0 !important;
+padding-right: 0 !important;
+box-sizing: border-box !important;
+}
+.stTextInput>div>div>button {
+width: 38px !important;
+min-width: 38px !important;
+max-width: 38px !important;
+background: #fff !important;
+border: 2px solid #0b2545 !important;
+border-left: none !important;
+border-radius: 0 8px 8px 0 !important;
+margin: 0 !important;
+padding: 0 !important;
+box-shadow: none !important;
+position: static !important;
+z-index: 2;
+display: flex;
+align-items: center;
+justify-content: center;
+}
+.stTextInput>div>div {
+display: flex !important;
+flex-direction: row !important;
+align-items: stretch !important;
+}
+</style>
 """, unsafe_allow_html=True)
 
-# Header Button Style
 st.markdown("""
-    <style>
-    .header-btn {
-        background-color: #fff !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-        margin: 0 !important;
-        cursor: pointer;
-        outline: none !important;
-        display: inline-block;
-    }
-    .header-btn span {
-        font-size:2.4em;
-        font-weight:bold;
-        color:#0b2545 !important;
-        font-family:Georgia,serif;
-        background-color: #fff !important;
-        border: none !important;
-        box-shadow: none !important;
-        display: inline-block;
-    }
-    </style>
+<style>
+/* Verstecke die horizontale Progressbar/Leiste */
+div[data-testid="stProgress"] {
+display: none !important;
+}
+/* Verstecke leere dunkelblaue Balken */
+.css-1dp5vir, .css-1avcm0n, .css-1kyxreq {
+display: none !important;
+height: 0 !important;
+min-height: 0 !important;
+margin: 0 !important;
+padding: 0 !important;
+}
+</style>
 """, unsafe_allow_html=True)
 
-# === Kopfzeile ===
-c1, c2 = st.columns([6, 2])
-with c1:
-    col1, col2 = st.columns([6,1])
-    with col1:
-        button_html = """
-        <form action="/" method="get" style="display:inline;">
-            <button type="submit" class="header-btn"
-                onmouseover="this.children[0].style.textDecoration='underline';"
-                onmouseout="this.children[0].style.textDecoration='none';"
-            >
-                <span>InsightFundamental</span>
-            </button>
-        </form>
-        """
-        st.markdown(button_html, unsafe_allow_html=True)
-    with col2:
-        if SESSION.logged_in and SESSION.user_plan == "Standard":
-            if st.button("PLUS", key="btn_plus", help="Vorteile ansehen"):
-                redirect_to("abo")
-with c2:
-    if SESSION.logged_in:
-        st.markdown(
-            f"<div style='background:#0b2545;color:#fff;padding:6px 12px;border-radius:4px'>👤 {SESSION.username}</div>",
-            unsafe_allow_html=True
-        )
-        # Abmelden-Button wurde HIER entfernt! (Siehe nächste Änderung im Dashboard)
-    else:
-        current_view = st.query_params.get("view", ["Alle Nachrichten"])[0]
-        if current_view not in ["login", "register", "vorteile"]:
-            btn_cols = st.columns([1.5, 0.18, 1.5, 0.3, 1.5])  # Abstand angepasst!
-            with btn_cols[0]:
-                if st.button("Vorteile", key="btn_vorteile", help="Erfahre mehr über die Vorteile von InsightFundamental"):
-                    redirect_to("vorteile")
-            with btn_cols[2]:
-                if st.button("Anmelden", key="btn_login", help="Einloggen"):
-                    redirect_to("login")
-            with btn_cols[4]:
-                if st.button("Registrieren", key="btn_reg", help="Konto erstellen"):
-                    redirect_to("register")
-        elif current_view == "vorteile":
-            btn_cols = st.columns([1.5, 0.3, 1.5])
-            with btn_cols[0]:
-                if st.button("Anmelden", key="btn_login", help="Einloggen"):
-                    redirect_to("login")
-            with btn_cols[2]:
-                if st.button("Registrieren", key="btn_reg", help="Konto erstellen"):
-                    redirect_to("register")
+st.markdown("""
+<style>
+.block-container, .main, .block-container > div:first-child {
+margin-top: 0 !important;
+padding-top: 0 !important;
+}
+section[data-testid="stSidebar"] {
+margin-top: 0 !important;
+padding-top: 0 !important;
+}
+.content-col {
+margin-top: 0 !important;
+padding-top: 0 !important;
+}
+/* Linke und mittlere Spalte (Dashboard und Nachrichten) nach oben rücken */
+div[data-testid="column"]:nth-of-type(1),
+div[data-testid="column"]:nth-of-type(2) {
+margin-top: 0 !important;
+padding-top: 0 !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
-st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
+# === Header mit Navigation ===
 
-# === View auslesen ===
-view = st.query_params.get("view", ["Alle Nachrichten"])[0]
+params = st.experimental_get_query_params()
+view = params.get("view", ["landing"])[0]
 
-# === Vorteile-Seite ===
-if view == "vorteile":
-    st.markdown("""
-    <h2 style='color:#0b2545; margin-bottom:24px;'>Vorteile von InsightFundamental</h2>
-    <div style="
-        background: #f5f8fa;
-        border: 2px solid #0b2545;
-        border-radius: 12px;
-        padding: 24px;
-        max-width: 800px;
-        margin: auto;
-    ">
-      <ul style="font-size:18px; line-height:1.6; margin:0;">
-        <li>Top-aktuelle Wirtschafts-, Politik- und Finanznachrichten</li>
-        <li>Automatische Erkennung von Markteinflüssen und Sentiment</li>
-        <li>Praktische Suchfunktion für relevante News</li>
-        <li>Favoriten & individuelles Dashboard nach Login</li>
-        <li>Exklusive PLUS-Features wie Impact Score, Marktzuordnung & mehr</li>
-      </ul>
+# -- HEADER MIT HAMBURGER-BUTTON (nur auf News-Seite) ---
+
+show_hamburger = view in ["news", "Alle Nachrichten"]
+
+# Header wie vorher (ohne Sprachwahl)
+
+header_html = """
+<div class="header-nav" style="display:flex;align-items:center;">
+<div style='display:flex;align-items:center;'>
+<h1 style='margin-left:0.7em;'>InsightFundamental</h1>
+"""
+if show_hamburger:
+header_html += "<span id='dashboard-hamburger-placeholder'></span>"
+header_html += "</div><div style='display:flex;align-items:center;'>"
+header_html += f"<a href='/?view=landing'>{get_text('home')}</a>"
+header_html += f"<a href='/?view=news'>{get_text('news_analysis')}</a>"
+header_html += f"<a href='/?view=funktionen'>{get_text('features')}</a>"
+if not SESSION.logged_in:
+header_html += f"<a href='/?view=login' class='button'>{get_text('login')}</a>"
+header_html += f"<a href='/?view=register' class='button' style='margin-left:0.7em;'>{get_text('register')}</a>"
+header_html += f"<a href='/?view=register' class='button' style='margin-left:0.7em;'>{get_text('free_trial')}</a>"
+else:
+header_html += f"<span style='margin-left:1.5rem; color:#fff; font-weight:600;'>{SESSION.username}</span>"
+header_html += f"<a href='/?logout=1' class='button' style='margin-left:1.5rem;'>{get_text('logout')}</a>"
+header_html += "</div></div>"
+st.markdown(header_html, unsafe_allow_html=True)
+st.markdown("<div style='margin-bottom:2rem;'></div>", unsafe_allow_html=True)
+
+# Logout-Logik
+
+if 'logout' in params:
+SESSION.logged_in = False
+SESSION.username = ''
+SESSION.user_plan = ''
+st.experimental_set_query_params(view=["landing"])
+st.rerun()
+
+# === Landing-Page ===
+
+if view == "landing":
+# Kein Farbverlauf, Buttons und Feature-Boxen wieder klar umrandet, CTA-Buttons achsensymmetrisch, keine Unterstreichung auf Buttons
+st.markdown("""
+<style>
+.header-nav {
+background: #fff !important;
+color: #0b2545 !important;
+box-shadow: none !important;
+border-radius: 0 !important;
+}
+.header-nav h1, .header-nav a {
+color: #0b2545 !important;
+background: none !important;
+}
+.header-nav a.button {
+background: #0b2545 !important;
+color: #fff !important;
+border: 2px solid #0b2545 !important;
+border-radius: 25px !important;
+font-weight: 700;
+box-shadow: none !important;
+}
+.header-nav a.button:hover {
+background: #1b325c !important;
+color: #fff !important;
+text-decoration: none !important;
+}
+/* CTA-Buttons klar umrandet, keine Unterstreichung */
+.cta-btn {
+display: inline-block;
+background: #0b2545 !important;
+color: #fff !important;
+border: none !important;
+border-radius: 25px !important;
+font-weight: 700;
+font-size: 1.1em;
+padding: 1rem 2rem;
+text-decoration: none !important;
+box-shadow: 0 4px 15px rgba(11,37,69,0.3) !important;
+transition: background 0.2s, color 0.2s;
+margin: 0.5rem 0.5rem;
+}
+.cta-btn:hover {
+background: #1b325c !important;
+color: #fff !important;
+text-decoration: none !important;
+box-shadow: 0 6px 20px rgba(11,37,69,0.4) !important;
+}
+/* Feature-Boxen klar umrandet */
+.feature-box {
+background: #fff !important;
+border: 2px solid #0b2545 !important;
+border-radius: 16px !important;
+box-shadow: 0 4px 24px rgba(11,37,69,0.08);
+padding: 2rem 1.2rem 1.2rem 1.2rem;
+margin: 1.2rem 0.5rem;
+min-height: 220px;
+text-align: center;
+}
+.feature-icon {
+font-size: 2.5em;
+margin-bottom: 0.5rem;
+}
+.feature-title {
+color: #0b2545 !important;
+font-size: 1.2em;
+font-weight: 700;
+margin-bottom: 0.5rem;
+}
+.feature-text {
+color: #111 !important;
+opacity: 0.95;
+font-size: 1em;
+}
+</style>
+""", unsafe_allow_html=True)
+
+```
+# Hero-Bereich mit zentriertem Button
+st.markdown(f"""
+<div class='news-card' style='background:#fff; border:2px solid #e6f0fa; border-radius:18px; box-shadow:0 4px 18px rgba(11,37,69,0.07); padding:2rem 1.5rem 1.2rem 1.5rem; margin:2.2rem auto; max-width:700px; text-align:center;'>
+    <h2 style='font-size:3em; color:#0b2545; font-weight:800; margin-top:2rem;'>{get_text('hero_title')}</h2>
+    <p style='color:#111; font-size:1.3em; margin-bottom:2.5rem;'>
+        {get_text('hero_subtitle')}
+    </p>
+    <div style='display:flex; justify-content:center;'><a href='/?view=funktionen' class='cta-btn'>{get_text('discover_features')}</a></div>
+</div>
+""", unsafe_allow_html=True)
+st.markdown("<br>", unsafe_allow_html=True)
+
+# Features-Bereich
+st.markdown(f"<h3 style='color:#0b2545; text-align:center; margin-top:3rem;'>{get_text('why_insight')}</h3>", unsafe_allow_html=True)
+feature_icons = ["📊", "🎯", "📈", "🔒"]
+feature_titles = [
+    get_text('impact_score'),
+    get_text('affected_markets'),
+    get_text('historical_patterns'),
+    get_text('confidence_level')
+]
+feature_texts = [
+    get_text('impact_score_desc'),
+    get_text('affected_markets_desc'),
+    get_text('historical_patterns_desc'),
+    get_text('confidence_level_desc')
+]
+cols = st.columns(2)
+for i in range(2):
+    with cols[i]:
+        st.markdown(f"<div class='feature-box'>"
+                    f"<div class='feature-icon'>{feature_icons[i]}</div>"
+                    f"<div class='feature-title'>{feature_titles[i]}</div>"
+                    f"<div class='feature-text'>{feature_texts[i]}</div>"
+                    f"</div>", unsafe_allow_html=True)
+cols = st.columns(2)
+for i in range(2,4):
+    with cols[i-2]:
+        st.markdown(f"<div class='feature-box'>"
+                    f"<div class='feature-icon'>{feature_icons[i]}</div>"
+                    f"<div class='feature-title'>{feature_titles[i]}</div>"
+                    f"<div class='feature-text'>{feature_texts[i]}</div>"
+                    f"</div>", unsafe_allow_html=True)
+
+# Vorteile-Bereich mit einzeln umrandeten Boxen
+st.markdown(f"<h3 style='color:#0b2545; text-align:center; margin-top:3rem;'>{get_text('your_benefits')}</h3>", unsafe_allow_html=True)
+benefit_icons = ["💰", "⏰", "📱", "🎯"]
+benefit_titles = [
+    get_text('better_decisions'),
+    get_text('time_saving'),
+    get_text('always_informed'),
+    get_text('focused_info')
+]
+benefit_texts = [
+    get_text('better_decisions_desc'),
+    get_text('time_saving_desc'),
+    get_text('always_informed_desc'),
+    get_text('focused_info_desc')
+]
+for i in range(4):
+    st.markdown(f"""
+    <div style='background:#fff; border:2px solid #0b2545; border-radius:12px; box-shadow:0 2px 12px rgba(11,37,69,0.07); padding:1.2rem 1rem; margin:1.2rem auto; max-width:700px; display:flex; align-items:center; color:#111;'>
+        <div style='font-size:2em; margin-right:1.2rem;'>{benefit_icons[i]}</div>
+        <div><div style='color:#0b2545; font-size:1.1em; font-weight:700;'>{benefit_titles[i]}</div>
+        <div style='color:#111; opacity:0.85;'>{benefit_texts[i]}</div></div>
     </div>
     """, unsafe_allow_html=True)
-    st.stop()
 
-# === Tägliche Marktveränderungen (nur wenn NICHT Login/Register) ===
-if view == "Alle Nachrichten":
-    symbols = {
-        "DAX":"^GDAXI",
-        "S&P 500":"^GSPC",
-        "Nasdaq":"^IXIC",
-        "Dow Jones":"^DJI",
-        "EUR/USD":"EURUSD=X",
-        "10Y US Treasury":"^TNX",
-        "USD/JPY":"JPY=X"
-    }
-    market_data = {}
-    market_prices = {}
-    for name, sym in symbols.items():
-        try:
-            ticker = yf.Ticker(sym)
-            hist = ticker.history(period="2d")["Close"]
-            price = hist.iloc[-1]
-            pct = round((hist.iloc[-1] - hist.iloc[-2]) / hist.iloc[-2] * 100, 2)
-            market_data[name] = pct
-            if "EUR/USD" in name or "USD/JPY" in name:
-                price_str = f"{price:.4f}"
-            elif "10Y" in name:
-                price_str = f"{price:.3f}"
-            else:
-                price_str = f"{price:,.2f}"
-            market_prices[name] = price_str
-        except Exception as e:
-            market_data[name] = None
-            market_prices[name] = "N/A"
+# Call-to-Action unten
+st.markdown(f"<div style='text-align:center; margin:3rem 0;'><a href='/?view=register' class='cta-btn'>{get_text('start_free')}</a></div>", unsafe_allow_html=True)
+st.stop()
 
-    cols = st.columns(len(market_data))
-    for i, (n, pct) in enumerate(market_data.items()):
-        with cols[i]:
-            html = f"<div class='market-box'><b>{n}</b>"
-            html += f"<div style='font-size:18px;font-weight:bold;'>{market_prices[n]}</div>"
-            if pct is not None:
-                clr  = "green" if pct>0 else "red" if pct<0 else "black"
-                sign = "+" if pct>0 else ""
-                html += f"<div style='color:{clr}; font-size:18px'>{sign}{pct}%</div>"
-            else:
-                html += "<div style='color:gray; font-size:18px'>N/A</div>"
-            html += "</div>"
-            st.markdown(html, unsafe_allow_html=True)
+```
 
-    st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
+# === Funktionen-Seite ===
 
-# === ABONNEMENT-SEITE ===
-if view == "abo":
-    # Überschrift
-    st.markdown(
-        "<h2 style='color:#0b2545; margin-bottom:32px;'>InsightFundamental Abo-Modelle</h2>",
-        unsafe_allow_html=True
-    )
+if view == "funktionen":
+# Komplett weißer Hintergrund für sanften Übergang
+st.markdown("""
+<style>
+.stApp, .block-container, section[data-testid="stAppViewContainer"] > div:first-child {
+background: #fff !important;
+}
+.header-nav {
+background: #fff !important;
+color: #0b2545 !important;
+box-shadow: none !important;
+border-radius: 0 !important;
+}
+.header-nav h1, .header-nav a, .header-nav a.button {
+color: #0b2545 !important;
+background: none !important;
+}
+.header-nav a.button {
+background: #0b2545 !important;
+color: #fff !important;
+border-radius: 25px !important;
+font-weight: 700;
+box-shadow: 0 4px 15px rgba(11,37,69,0.3) !important;
+border: none !important;
+padding: 1rem 2rem !important;
+}
+.header-nav a.button:hover {
+background: #1b325c !important;
+color: #fff !important;
+box-shadow: 0 6px 20px rgba(11,37,69,0.4) !important;
+}
+/* Features page specific styling */
+.function-section {
+background: #fff;
+border: 2px solid #0b2545;
+border-radius: 16px;
+padding: 2.5rem;
+margin: 2rem 0;
+box-shadow: 0 4px 24px rgba(11,37,69,0.08);
+}
+.function-header {
+display: flex;
+align-items: center;
+margin-bottom: 1.5rem;
+}
+.function-icon {
+font-size: 3em;
+margin-right: 1.5rem;
+}
+.function-title {
+color: #0b2545;
+font-size: 2em;
+font-weight: 700;
+margin: 0;
+}
+.function-description {
+color: #111;
+font-size: 1.1em;
+line-height: 1.7;
+margin-bottom: 1.5rem;
+}
+.function-benefits {
+background: #f8f9fa;
+border-left: 4px solid #0b2545;
+padding: 1.5rem;
+margin: 1.5rem 0;
+border-radius: 0 8px 8px 0;
+}
+.function-benefits h4 {
+color: #0b2545;
+margin-bottom: 1rem;
+font-size: 1.2em;
+}
+.function-benefits ul {
+margin: 0;
+padding-left: 1.5rem;
+}
+.function-benefits li {
+margin: 0.5rem 0;
+color: #111;
+}
+.function-example {
+background: #e6f0fa;
+border: 1px solid #0b2545;
+border-radius: 8px;
+padding: 1.5rem;
+margin: 1.5rem 0;
+}
+.function-example h4 {
+color: #0b2545;
+margin-bottom: 1rem;
+font-size: 1.1em;
+}
+.function-example p {
+color: #111;
+margin: 0;
+font-style: italic;
+}
+</style>
+""", unsafe_allow_html=True)
 
-    # Plan-Karten
-    st.markdown("""
-    <div style="display: flex; gap: 32px; flex-wrap: wrap;">
-      <div style="flex:1; min-width:270px; max-width:360px; background:#f5f8fa; border-radius:18px; 
-                  box-shadow:0 4px 18px #0b25451a; padding:32px 26px; border:2px solid #c3d0e6;">
-        <h3 style="color:#0b2545;">Standard</h3>
-        <div style="font-size:2em; font-weight:bold; margin:18px 0; color:#111;">Kostenlos</div>
-        <ul style="color:#222; font-size:18px; line-height:1.55;">
-          <li>Alle aktuellen Nachrichten</li>
-        </ul>
-      </div>
-      <div style="flex:1; min-width:270px; max-width:360px; background:#fff; border-radius:18px; 
-                  box-shadow:0 4px 24px #0b254533; padding:32px 26px; border:2.5px solid #0b2545; 
-                  position:relative;">
-        <span style="position:absolute; top:18px; right:16px; background:#0b2545; color:#fff; 
-                     padding:6px 13px; font-size:0.98em; border-radius:10px; font-weight:bold;">
-          PLUS
-        </span>
-        <h3 style="color:#0b2545;">InsightFundamental PLUS</h3>
-        <div style="font-size:2em; font-weight:bold; margin:18px 0; color:#0b2545;">
-          19,99 € <span style="font-size:0.5em; color:#555;">/ Monat</span>
-        </div>
-        <ul style="color:#222; font-size:18px; line-height:1.55;">
-          <li>Impact Score & Marktzuordnung</li>
-          <li>Konfidenz­grad & historische Muster</li>
-          <li>Erweiterte Analysen & exklusive Features</li>
-        </ul>
-      </div>
+```
+st.markdown(f"""
+<div style="text-align:center; color:#0b2545; padding:3rem 0;">
+  <h1 style="font-size:3em; margin-bottom:1rem;">{get_text('features_detail')}</h1>
+  <p style="font-size:1.3em; color:#111;">{get_text('features_subtitle')}</p>
+</div>
+""", unsafe_allow_html=True)
+
+# Feature 1: Real-time News
+st.markdown("""
+<div class="function-section">
+    <div class="function-header">
+        <div class="function-icon">📰</div>
+        <h2 class="function-title">Real-time News</h2>
     </div>
-    """, unsafe_allow_html=True)
+    <div class="function-description">
+        We aggregate the most important economic and political news from over 50+ renowned sources worldwide. From Reuters and Bloomberg to specialized financial portals – we keep an eye on everything so you never miss any important market developments.
+    </div>
+    <div class="function-benefits">
+        <h4>Your Benefits:</h4>
+        <ul>
+            <li><strong>Time saving:</strong> No more tedious searching for relevant news</li>
+            <li><strong>Quality filter:</strong> Only reputable, verified sources are considered</li>
+            <li><strong>Global perspective:</strong> International news from all major markets</li>
+        </ul>
+    </div>
+    <div class="function-example">
+        <h4>Example:</h4>
+        <p>Instead of spending hours browsing various news portals, you get a central overview of all relevant developments. An important ECB interest rate decision is immediately displayed with all details and market impact.</p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-    # Abstand
-    st.markdown("<div style='margin-bottom:40px'></div>", unsafe_allow_html=True)
+# Feature 2: Impact Score
+st.markdown("""
+<div class="function-section">
+    <div class="function-header">
+        <div class="function-icon">📊</div>
+        <h2 class="function-title">Impact Score (-10 to 10)</h2>
+    </div>
+    <div class="function-description">
+        Our AI automatically evaluates the potential impact of each news item on important markets. The Impact Score from -10 to 10 gives you an instant, clear assessment of how strongly a news item could affect the markets. A score of 10 means maximum positive market impact, while -10 signals maximum negative relevance.
+    </div>
+    <div class="function-benefits">
+        <h4>Your Benefits:</h4>
+        <ul>
+            <li><strong>Instant assessment:</strong> AI-powered analysis in seconds</li>
+            <li><strong>Objective evaluation:</strong> No human bias or emotion</li>
+            <li><strong>Prioritization:</strong> Focus on the truly important news</li>
+            <li><strong>Consistent rating:</strong> Same criteria for all news</li>
+        </ul>
+    </div>
+    <div class="function-example">
+        <h4>Example:</h4>
+        <p>A news item about an unexpected Fed rate hike receives an Impact Score of 9/10, while a local economic news item only gets a score of 3/10. This way, you immediately know which news deserves your attention.</p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-    # Stripe-Checkout-Button nur für Standard-Nutzer
-    if SESSION.logged_in and SESSION.user_plan == "Standard":
-        checkout_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
-        st.markdown(f'''
-            <a href="{checkout_url}" target="_blank" style="text-decoration:none;">
-              <div style="
-                  display: inline-block;
-                  background-color: #0b2545;
-                  color: white;
-                  padding: 12px 28px;
-                  border-radius: 6px;
-                  font-size: 18px;
-                  font-weight: bold;
-                  cursor: pointer;
-              ">
-                InsightFundamental PLUS jetzt testen!
-              </div>
-            </a>
-        ''', unsafe_allow_html=True)
+# Feature 3: Affected Markets
+st.markdown("""
+<div class="function-section">
+    <div class="function-header">
+        <div class="function-icon">🎯</div>
+        <h2 class="function-title">Affected Markets</h2>
+    </div>
+    <div class="function-description">
+        Instantly get a detailed overview of which indices (DAX, S&P 500), sectors (Tech, Pharma), countries or currencies are affected by a news item. This precise market assignment helps you react specifically to relevant developments and adjust your portfolios accordingly.
+    </div>
+    <div class="function-benefits">
+        <h4>Your Benefits:</h4>
+        <ul>
+            <li><strong>Precise assignment:</strong> Exact identification of affected markets</li>
+            <li><strong>Opportunities:</strong> Spotting chances in affected sectors</li>
+            <li><strong>Global perspective:</strong> Overview of international market impacts</li>
+        </ul>
+    </div>
+    <div class="function-example">
+        <h4>Example:</h4>
+        <p>A news item about new data protection regulation immediately shows: "Affected markets: Tech sector, DAX, Nasdaq, European tech stocks". You instantly know that your tech investments should be reviewed.</p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-    # Bereits PLUS-Mitglied?
-    elif SESSION.logged_in and SESSION.user_plan == "Premium":
-        st.success("Du bist bereits PLUS-Mitglied 🎉")
+# Feature 4: Confidence Level
+st.markdown("""
+<div class="function-section">
+    <div class="function-header">
+        <div class="function-icon">🔒</div>
+        <h2 class="function-title">Confidence Level</h2>
+    </div>
+    <div class="function-description">
+        Shows you how reliable our AI analysis is. From "high" (very reliable) to "low" (caution in interpretation) – you always know how much trust you can place in the assessment. The confidence level is based on the quality of data sources, the clarity of the news, and the historical accuracy of our analyses.
+    </div>
+    <div class="function-benefits">
+        <h4>Your Benefits:</h4>
+        <ul>
+            <li><strong>Transparency:</strong> You always know how reliable the analysis is</li>
+            <li><strong>Risk awareness:</strong> Caution with low confidence values</li>
+            <li><strong>Trust:</strong> Act with increased certainty at high confidence values</li>
+            <li><strong>Quality control:</strong> Continuous improvement of analyses</li>
+            <li><strong>Decision support:</strong> Take reliability into account in your decisions</li>
+        </ul>
+    </div>
+    <div class="function-example">
+        <h4>Example:</h4>
+        <p>A clear ECB interest rate decision receives a "high" confidence level, while a vague hint from a politician only gets "low" confidence. This way, you can weigh your decisions accordingly.</p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-    # Nicht eingeloggt
-    else:
-        st.info("Bitte melde dich an, um das PLUS-Abo abzuschließen.")
-        if st.button("Anmelden"):
-            redirect_to("login")
+# Feature 5: Historical Patterns
+st.markdown("""
+<div class="function-section">
+    <div class="function-header">
+        <div class="function-icon">📈</div>
+        <h2 class="function-title">Historical Patterns</h2>
+    </div>
+    <div class="function-description">
+        Compare new developments with similar historical events and their market impacts. Learn from the past for better future decisions. Our AI automatically identifies similar situations and shows you how the markets behaved back then.
+    </div>
+    <div class="function-benefits">
+        <h4>Your Benefits:</h4>
+        <ul>
+            <li><strong>Learning from the past:</strong> Historical data as a decision-making aid</li>
+            <li><strong>Pattern recognition:</strong> Automatic identification of similar situations</li>
+            <li><strong>Risk minimization:</strong> Avoid repeating mistakes</li>
+            <li><strong>Opportunity recognition:</strong> Use proven strategies</li>
+            <li><strong>Market understanding:</strong> Better understanding of market dynamics</li>
+        </ul>
+    </div>
+    <div class="function-example">
+        <h4>Example:</h4>
+        <p>For a new trade dispute, the system shows: "Similar patterns: US-China trade war 2018-2020. Back then: DAX -15%, tech sector -20% in 3 months." This way, you can adjust your strategy accordingly.</p>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
-    st.stop()
+st.stop()
 
-# --- LOGIN ---
+```
+
+# === Login ===
+
 if view == "login":
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    col_center = st.columns([3,4,3])[1]
-    with col_center:
-        st.markdown("<h2 style='color:#0b2545; margin-bottom:16px; margin-left:4px; text-align:left;'>Anmelden</h2>", unsafe_allow_html=True)
-        with st.form("login_form"):
-            email = st.text_input("E-Mail")
-            pwd   = st.text_input("Passwort", type="password")
-            if st.form_submit_button("Einloggen"):
-                users = json.loads(USER_FILE.read_text())
-                if users.get(email) == hashlib.sha256(pwd.encode()).hexdigest():
-                    SESSION.logged_in = True
-                    SESSION.username = email
-                    SESSION.user_plan = "Standard"
-                    redirect_to("Alle Nachrichten")
-                elif users.get(email) and isinstance(users.get(email), dict):
-                    if users[email].get("pwd") == hashlib.sha256(pwd.encode()).hexdigest():
-                        SESSION.logged_in = True
-                        SESSION.username = email
-                        SESSION.user_plan = users[email].get("plan", "Standard")
-                        redirect_to("Alle Nachrichten")
-                else:
-                    st.error("Ungültige Anmeldedaten")
-        if st.button("Zurück zur Startseite"):
-            redirect_to("Alle Nachrichten")
-    st.stop()
+st.markdown("""
+<style>
+.login-card {
+background: none !important;
+border: none !important;
+box-shadow: none !important;
+padding: 0;
+margin: 3rem auto 2rem auto;
+max-width: 370px;
+min-width: 270px;
+display: flex;
+flex-direction: column;
+align-items: center;
+}
+.login-card h2 {
+color:#0b2545;
+font-size:1.7em;
+font-weight:700;
+margin-bottom:1.2em;
+text-align:center;
+}
+.login-card .stTextInput, .login-card .stTextInput>div, .login-card .stTextInput>div>div {
+width: 120px !important;
+max-width: 120px !important;
+min-width: 60px !important;
+}
+.login-card .stTextInput>div>div>input {
+width: 120px !important;
+max-width: 120px !important;
+min-width: 60px !important;
+}
+.login-card .stButton>button {
+width:100%;
+font-size:1.1em;
+padding:0.5em 0;
+border-radius:8px;
+margin-top:1.2em;
+}
+.login-card label, .login-card .stCheckbox {
+width:100%;
+text-align:left;
+}
+</style>
+""", unsafe_allow_html=True)
+cols = st.columns([2,1,2])
+with cols[1]:
+st.markdown('<div class="login-card">', unsafe_allow_html=True)
+st.markdown(f'<h2>{get_text("login_title")}</h2>', unsafe_allow_html=True)
+email = st.text_input(get_text("email"), key="login_email")
+pwd   = st.text_input(get_text("password"), type="password", key="login_pwd")
+keep_logged_in = st.checkbox(get_text("stay_logged_in"), key="keep_logged_in")
+if st.button(get_text("login_button")):
+users = json.loads(USER_FILE.read_text())
+pw_hash = hashlib.sha256(pwd.encode()).hexdigest()
+if users.get(email) == pw_hash:
+SESSION.logged_in = True
+SESSION.username = email
+SESSION.user_plan = "paid"
+redirect_to("news")
+st.rerun()  # Sofortiges Neuladen nach Login
+else:
+st.error(get_text("invalid_credentials"))
+if st.button(get_text("forgot_password"), key="forgot_pwd_btn"):
+st.experimental_set_query_params(view=["forgot_password"])
+st.rerun()
+st.markdown('</div>', unsafe_allow_html=True)
+st.stop()
 
-# --- REGISTER ---
+# === Registrierung ===
+
 if view == "register":
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    col_center = st.columns([3,4,3])[1]
-    with col_center:
-        st.markdown("<h2 style='color:#0b2545; margin-bottom:16px; margin-left:4px; text-align:left;'>Registrieren</h2>", unsafe_allow_html=True)
-        with st.form("reg_form"):
-            email       = st.text_input("E-Mail")
-            pwd         = st.text_input("Passwort", type="password")
-            pwd_confirm = st.text_input("Passwort bestätigen", type="password")
-            if st.form_submit_button("Registrieren"):
-                if pwd != pwd_confirm:
-                    st.error("Passwörter stimmen nicht überein")
-                else:
-                    users = json.loads(USER_FILE.read_text())
-                    if email in users:
-                        st.error("E-Mail bereits registriert")
-                    else:
-                        users[email] = hashlib.sha256(pwd.encode()).hexdigest()
-                        save_users(users)
-                        st.success("Registrierung erfolgreich!")
-                        redirect_to("login")
-        if st.button("Zurück zur Startseite"):
-            redirect_to("Alle Nachrichten")
-    st.stop()
+st.markdown("""
+<style>
+.register-card {
+background: none !important;
+border: none !important;
+box-shadow: none !important;
+padding: 0;
+margin: 3rem auto 2rem auto;
+max-width: 370px;
+min-width: 270px;
+display: flex;
+flex-direction: column;
+align-items: center;
+}
+.register-card h2 {
+color:#0b2545;
+font-size:1.7em;
+font-weight:700;
+margin-bottom:1.2em;
+text-align:center;
+}
+.register-card .stTextInput, .register-card .stTextInput>div, .register-card .stTextInput>div>div {
+width: 120px !important;
+max-width: 120px !important;
+min-width: 60px !important;
+}
+.register-card .stTextInput>div>div>input {
+width: 120px !important;
+max-width: 120px !important;
+min-width: 60px !important;
+}
+.register-card .stButton>button {
+width:100%;
+font-size:1.1em;
+padding:0.5em 0;
+border-radius:8px;
+margin-top:1.2em;
+}
+.register-card label, .register-card .stCheckbox {
+width:100%;
+text-align:left;
+}
+</style>
+""", unsafe_allow_html=True)
+cols = st.columns([2,1,2])
+with cols[1]:
+st.markdown('<div class="register-card">', unsafe_allow_html=True)
+st.markdown(f'<h2>{get_text("register_title")}</h2>', unsafe_allow_html=True)
+email = st.text_input(get_text("email"), key="reg_email")
+pwd   = st.text_input(get_text("password"), type="password", key="reg_pwd")
+pwd_confirm = st.text_input(get_text("confirm_password"), type="password", key="reg_pwd_confirm")
+agb = st.checkbox(get_text("accept_terms"), key="reg_agb")
+if st.button(get_text("register_button")):
+if not agb:
+st.error(get_text("accept_terms_error"))
+elif pwd != pwd_confirm:
+st.error(get_text("passwords_dont_match"))
+else:
+users = json.loads(USER_FILE.read_text())
+if email in users:
+st.error(get_text("email_already_registered"))
+else:
+users[email] = hashlib.sha256(pwd.encode()).hexdigest()
+save_users(users)
+SESSION.logged_in = True
+SESSION.username = email
+SESSION.user_plan = "paid"
+# Weiterleitung auf Stripe-Testphase-Platzhalter
+redirect_to("abo_starten")
+st.markdown('</div>', unsafe_allow_html=True)
+st.stop()
 
-# === EINDEUTIGE ID FÜR NACHRICHTEN VERGEBEN ===
-def news_id(row):
-    base = f"{row.get('title','')}_{row.get('publishedAt','')}"
-    return hashlib.md5(base.encode()).hexdigest()
+# Stripe-Testphase-Platzhalterseite
 
-if "news_id" not in df.columns and not df.empty:
-    df["news_id"] = df.apply(news_id, axis=1)
+if view == "abo_starten":
+st.header(f"{get_text('start_trial')}!")
+[st.info](http://st.info/)("Hier würde der Stripe-Checkout für die Testphase eingebunden werden.")
+st.markdown(f"<a href='/?view=news' class='button'>{get_text('continue_later')}</a>", unsafe_allow_html=True)
+st.stop()
 
-# === AUTOMATISCHE KATEGORISIERUNG (optional, kann bleiben, falls du später Filter wieder willst) ===
-def categorize_news(row):
-    text = f"{row.get('title','')} {row.get('description','')}".lower()
-    if any(word in text for word in ["wirtschaft", "konjunktur", "bip", "aufschwung", "inflation", "arbeitsmarkt"]):
-        return "Wirtschaft"
-    if any(word in text for word in ["wahl", "regierung", "parlament", "politik", "gesetz", "minister", "bundestag"]):
-        return "Politik"
-    if any(word in text for word in ["aktie", "börse", "finanz", "geld", "zins", "anleihe", "dividende", "markt"]):
-        return "Finanzen"
-    if any(word in text for word in ["tech", "technologie", "innovation", "digital", "ai", "künstliche intelligenz", "software", "startup"]):
-        return "Technologie"
-    return "Wirtschaft"
+# === Protected News-Startseite ===
 
-if "kategorie" not in df.columns and not df.empty:
-    df["kategorie"] = df.apply(categorize_news, axis=1)
+# if not SESSION.logged_in or SESSION.user_plan != "paid":
 
-# --- SIDEBAR DASHBOARD ---
-if SESSION.logged_in:
-    dash_tabs = ["Profil", "Abo & Billing", "Favoriten", "Support"]
-    st.sidebar.markdown('<h2 style="margin-bottom:32px;">Dashboard</h2>', unsafe_allow_html=True)
-    for tab in dash_tabs:
-        is_active = (SESSION.dashboard_tab == tab)
-        btn_class = "dashboard-btn active" if is_active else "dashboard-btn"
-        if st.sidebar.button(tab, key=f"btn_{tab}"):
-            SESSION.dashboard_tab = tab
-        st.sidebar.markdown(
-            f"""<style>
-                #{f"btn_{tab}"} button.dashboard-btn {{
-                    {'background:#1b325c;' if is_active else 'background:transparent;'}
-                    font-size:22px;
-                    font-weight:bold;
-                    color:#fff !important;
-                    padding:15px 22px;
-                    border-radius:10px;
-                    border:none;
-                    text-align:left;
-                    width:100%;
-                }}
-            </style>""",
-            unsafe_allow_html=True
-        )
-    st.sidebar.markdown('<hr style="border: 1.5px solid #fff; margin: 16px 0 18px 0; border-radius:2px;">', unsafe_allow_html=True)
-    st.sidebar.markdown(f'<div class="current-tab">{SESSION.dashboard_tab}</div>', unsafe_allow_html=True)
+# st.warning("Zugang nur für zahlende Abonnenten.")
 
-    # --- Tabs Inhalt ---
-    if SESSION.dashboard_tab == "Profil":
-        st.sidebar.markdown(f"<b>E-Mail:</b> {SESSION.username}", unsafe_allow_html=True)
-        if "pw_change_open" not in SESSION:
-            SESSION.pw_change_open = False
-        if st.sidebar.button("Passwort ändern", key="btn_pw_change"):
-            SESSION.pw_change_open = not SESSION.pw_change_open
-        if SESSION.pw_change_open:
-            old = st.sidebar.text_input("Aktuelles Passwort", type="password", key="old_pw")
-            new = st.sidebar.text_input("Neues Passwort", type="password", key="new_pw")
-            if st.sidebar.button("Aktualisieren", key="btn_upd_pw"):
-                users = json.loads(USER_FILE.read_text())
-                if users.get(SESSION.username) == hashlib.sha256(old.encode()).hexdigest():
-                    users[SESSION.username] = hashlib.sha256(new.encode()).hexdigest()
-                    save_users(users)
-                    st.sidebar.success("Passwort geändert")
-                    SESSION.pw_change_open = False
-                else:
-                    st.sidebar.error("Aktuelles Passwort falsch")
-        # HIER: Abmelden-Button im Dashboard, Tab "Profil" (ganz unten)
-        if st.sidebar.button("Abmelden", key="btn_logout_sidebar"):
-            SESSION.logged_in = False
-            SESSION.username = ""
-            redirect_to("Alle Nachrichten")
-    elif SESSION.dashboard_tab == "Abo & Billing":
-        st.sidebar.markdown(f"**Plan:** {SESSION.user_plan}")
-        if SESSION.user_plan == "Premium":
-            st.sidebar.markdown("**Nächste Abbuchung:** 01.06.2025")
-            if st.sidebar.button("Abo kündigen"):
-                SESSION.user_plan = "Standard"
-                st.sidebar.warning("Abo gekündigt")
-        elif SESSION.user_plan == "Standard":
-            if st.sidebar.button("InsightFundamental PLUS"):
-                SESSION.user_plan = "Premium"
-                st.sidebar.success("Abo auf Premium umgestellt!")
-    elif SESSION.dashboard_tab == "Favoriten":
-        st.sidebar.markdown("### Deine Favoriten")
-        users = json.loads(USER_FILE.read_text())
-        user_data = users.get(SESSION.username, {})
-        if isinstance(user_data, str):
-            user_data = {"pwd": user_data, "favorites": []}
-            users[SESSION.username] = user_data
-            save_users(users)
-        favorites = user_data.get("favorites", [])
+# st.stop()
 
-        fav_df = pd.DataFrame()
-        if not favorites == [] and not df.empty:
-            fav_df = df[df["news_id"].isin(favorites)].copy()
-            fav_df["publishedAt"] = pd.to_datetime(fav_df["publishedAt"], errors="coerce")
-            fav_df = fav_df.sort_values("publishedAt", ascending=False)
+# === Translation Functions ===
 
-        if fav_df.empty:
-            st.sidebar.info("Noch keine Favoriten gespeichert.")
-        else:
-            for _, row in fav_df.iterrows():
-                headline = row['title']
-                datum = row['publishedAt'].strftime('%d.%m.%Y %H:%M') if pd.notna(row['publishedAt']) else '-'
-                st.sidebar.markdown(
-                    f"<a href='/?view=news_detail&news_id={row['news_id']}' target='_self'>"
-                    f"<b>{headline}</b></a><br><span style='color:#666;font-size:12px'>{datum}</span><hr>",
-                    unsafe_allow_html=True
-                )
-    elif SESSION.dashboard_tab == "Support":
-        fb = st.sidebar.text_area("Feedback / Support")
-        if st.sidebar.button("Abschicken"):
-            st.sidebar.success("Danke für dein Feedback!")
+def translate_text(text, target_lang):
+"""Simple translation function - for now just returns English text"""
+if target_lang == "en":
+return text  # Keep English as is
+elif target_lang == "de":
+# For now, return English text. German translations can be added later
+return text
+else:
+return text
 
-# === Suchleiste ===
-if view not in ["login", "register"]:
-    search = st.text_input("", placeholder="Suchen...", label_visibility="collapsed", key="search_bar")
-    st.markdown("<div style='margin-bottom:30px'></div>", unsafe_allow_html=True)
+# === News-Startseite ===
 
-# --- MARKETS (Charts) ---
-view = st.query_params.get("view", ["Alle Nachrichten"])[0]
-if view == "Märkte":
-    st.subheader("Marktübersicht – 1-Tages-Kerzencharts")
-    def tv(sym, title):
-        st.markdown(f"""
-        <h4>{title}</h4>
-        <iframe src="https://s.tradingview.com/widgetembed/?symbol={sym}&interval=D&hidesidetoolbar=1&theme=light&style=1"
-                width="100%" height="400" frameborder="0" scrolling="no"></iframe>
-        """, unsafe_allow_html=True)
-    tv("OANDA:DE30EUR","DAX")
-    tv("AMEX:SPY","S&P 500")
-    tv("OANDA:NAS100USD","Nasdaq")
-    tv("OANDA:US30USD","Dow Jones")
-    st.stop()
+if view in ["news", "Alle Nachrichten"]:
+# Weiterleitung für nicht eingeloggte Nutzer
+if not SESSION.logged_in:
+st.experimental_set_query_params(view=["login"])
+st.rerun()
+st.stop()
+# --- Impact Score & Confidence Filter ganz oben, optisch rechts ---
+filter_left, filter_center, filter_right = st.columns([1,2,1])
+with filter_right:
+# Überschrift 'Filter' entfernen
+# st.markdown(f"<h5 style='color:#0b2545; margin-bottom:0.3em; font-size:1.05em;'>{get_text('filter')}</h5>", unsafe_allow_html=True)
+# Überschrift Impact Score
+st.markdown(f"<div style='font-size:0.98em; color:#0b2545; font-weight:600; margin-bottom:0.1em;'>{get_text('impact_score_filter')}</div>", unsafe_allow_html=True)
+impact_min, impact_max = st.session_state.get('impact_filter_news', (-10, 10))
+impact_min, impact_max = st.slider(
+get_text('impact_score_filter'),
+-10, 10, (impact_min, impact_max), key='impact_filter_news',
+label_visibility='collapsed',
+step=1,
+help=None,
+)
+# Überschrift Confidence Level
+st.markdown(f"<div style='font-size:0.98em; color:#0b2545; font-weight:600; margin-bottom:0.1em; margin-top:0.5em;'>{get_text('confidence_level_filter')}</div>", unsafe_allow_html=True)
+confidence_options = ["All", get_text("confidence_high"), get_text("confidence_medium"), get_text("confidence_low")]
+confidence_selected = st.session_state.get('confidence_level_news', 'All')
+confidence_selected = st.radio(
+get_text('confidence_level_filter'),
+confidence_options,
+index=confidence_options.index(confidence_selected) if confidence_selected in confidence_options else 0,
+key='confidence_level_news',
+horizontal=True,
+label_visibility='collapsed',
+help=None,
+)
+st.markdown("<div style='height:0.5em;'></div>", unsafe_allow_html=True)
+st.markdown("<style>.block-container {padding-top: 0.5rem !important;}</style>", unsafe_allow_html=True)
 
-# === Detail-Ansicht für einzelne Nachrichten ===
-if view == "news_detail":
-    news_id = st.query_params.get("news_id", [None])[0]
-    if news_id and not df.empty:
-        row = df[df["news_id"] == news_id]
-        if not row.empty:
-            r = row.iloc[0]
-            st.markdown(f"## {r['title']}")
-            if pd.notna(r["publishedAt"]):
-                st.markdown(
-                    f"<div class='timestamp'>{r['publishedAt'].strftime('%d.%m.%Y %H:%M')}</div>",
-                    unsafe_allow_html=True
-                )
-            if pd.notna(r.get("description")) and r.get("description"):
-                st.markdown(f"{r['description']}")
-            if r.get("image") and pd.notna(r['image']):
-                st.image(r["image"], use_column_width=True)
-            cls = (
-                "impact-bearish" if "bearish" in r['impact_label']
-                else "impact-bullish" if "bullish" in r['impact_label']
-                else "impact-neutral"
-            )
-            st.markdown(
-                f"<p><b>Impact Score:</b> <span class='{cls}'>{r['impact_label']}</span></p>",
-                unsafe_allow_html=True
-            )
-            st.markdown(f"**Märkte betroffen:** {r.get('markets','-')}")
-            st.markdown(f"**Konfidenzgrad:** {r.get('confidence','-')}")
-            st.markdown(f"**Historische Muster:** {r.get('patterns','-')}")
-            st.markdown(
-                f"<details><summary><strong>Analyse anzeigen</strong></summary><p>{r.get('explanation','-')}</p></details>",
-                unsafe_allow_html=True
-            )
-            st.markdown("---")
-        else:
-            st.warning("Nachricht nicht gefunden.")
-    else:
-        st.warning("Keine Nachricht ausgewählt oder keine Daten verfügbar.")
-    st.stop()
+```
+# --- Linke Spalte: Dashboard ---
+left_col, mid_col, right_col = st.columns([1,2,1])
+with left_col:
+    st.markdown('<div class="content-col">', unsafe_allow_html=True)
+    # --- Benutzer-Einstellungen Header ---
+    st.markdown(f"""
+    <div style='background:#0b2545; color:#fff; border-radius:14px; height:48px; display:flex; align-items:center; justify-content:center; font-size:1.15em; font-weight:700; margin-bottom:0; margin-top:0.5em; box-shadow:0 2px 8px rgba(11,37,69,0.08); letter-spacing:0.5px;'>
+        {get_text('user_settings')}
+    </div>
+    """, unsafe_allow_html=True)
+    # --- Benutzer-Dashboard ---
+    st.markdown("""
+    <style>
+    .user-dashboard {
+        background: transparent !important;
+        color: #0b2545;
+        border-radius: 0 !important;
+        padding: 0 1.5rem 1.5rem 1.5rem;
+        margin-top: 0 !important;
+        margin-bottom: 2.5rem;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        box-shadow: none !important;
+    }
+    .user-dashboard h3:first-child {
+        margin-top: 0 !important;
+    }
+    .dashboard-section-box {
+        background: #fff;
+        color: #0b2545;
+        border-radius: 12px;
+        box-shadow: 0 2px 12px rgba(11,37,69,0.08);
+        padding: 1.2em 1em 1.2em 1em;
+        margin-bottom: 1.5em;
+    }
+    .dashboard-section-box h3 {
+        color: #0b2545;
+        font-size: 1.15em;
+        font-weight: 700;
+        margin-bottom: 0.7em;
+        margin-top: 0;
+    }
+    .user-dashboard label, .user-dashboard .stTextInput label {
+        color: #0b2545 !important;
+        font-weight: 600;
+    }
+    .user-dashboard .stTextInput>div>div>input, .user-dashboard textarea {
+        background: #fff !important;
+        color: #0b2545 !important;
+        border: 2px solid #0b2545 !important;
+        border-radius: 8px !important;
+    }
+    .user-dashboard .stButton>button {
+        background: #0b2545 !important;
+        color: #fff !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 700 !important;
+        margin-top: 0.7em;
+        margin-bottom: 0.7em;
+    }
+    .user-dashboard .abo-status {
+        font-size: 1.1em;
+        font-weight: 600;
+        margin-bottom: 0.5em;
+    }
+    .user-dashboard .abo-status.active {
+        color: #1a7f3c;
+    }
+    .user-dashboard .abo-status.cancelled {
+        color: #b80000;
+    }
+    .user-dashboard .abo-status.trial {
+        color: #bfa100;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
-# === Filtern & Aufbereiten ===
-if df.empty:
-    st.info("Keine Nachrichten verfügbar.")
-    st.stop()
+    st.markdown('<div class="user-dashboard">', unsafe_allow_html=True)
 
-df["impact"] = pd.to_numeric(df.get("impact", 0), errors="coerce").fillna(0)
-def grade(v):
-    if v <= -7: return "sehr negativ"
-    if v <= -3: return "negativ"
-    if v >= 7:  return "sehr positiv"
-    if v >= 3:  return "positiv"
-    return "neutral"
-df["impact_label"] = df["impact"].apply(grade)
-df = df[df["impact_label"] != "neutral"]
-df["publishedAt"] = pd.to_datetime(df.get("publishedAt"), errors="coerce")
-df["sentiment"] = df.get("sentiment", "").astype(str).str.strip().str.lower()
-
-if view not in ["login", "register"]:
-    if 'search' in locals() and search:
-        q = search.lower()
-        df = df[df["title"].str.lower().str.contains(q, na=False) |
-                df["description"].str.lower().str.contains(q, na=False)]
-
-    for _, r in df.iterrows():
-        st.markdown(f"### {r['title']}")
-        if pd.notna(r["publishedAt"]):
-            st.markdown(
-                f"<div class='timestamp'>{r['publishedAt'].strftime('%d.%m.%Y %H:%M')}</div>",
-                unsafe_allow_html=True
-            )
-        if pd.notna(r.get("description")) and r.get("description"):
-            st.markdown(f"{r['description']}")
-        if r.get("image") and pd.notna(r['image']):
-            st.image(r["image"], use_column_width=True)
-        cls = (
-            "impact-bearish" if "bearish" in r['impact_label']
-            else "impact-bullish" if "bullish" in r['impact_label']
-            else "impact-neutral"
-        )
-        st.markdown(
-            f"<p><b>Impact Score:</b> <span class='{cls}'>{r['impact_label']}</span></p>",
-            unsafe_allow_html=True
-        )
-        st.markdown(f"**Märkte betroffen:** {r.get('markets','-')}")
-        st.markdown(f"**Konfidenzgrad:** {r.get('confidence','-')}")
-        st.markdown(f"**Historische Muster:** {r.get('patterns','-')}")
-        st.markdown(
-            f"<details><summary><strong>Analyse anzeigen</strong></summary><p>{r.get('explanation','-')}</p></details>",
-            unsafe_allow_html=True
-        )
-        if SESSION.logged_in:
-            users = json.loads(USER_FILE.read_text())
-            user_data = users.get(SESSION.username, {})
-            if isinstance(user_data, str):
-                user_data = {"pwd": user_data, "favorites": []}
-                users[SESSION.username] = user_data
-                save_users(users)
-            favorites = user_data.get("favorites", [])
-            news_id = r["news_id"]
-            if news_id in favorites:
-                if st.button("Aus Favoriten entfernen", key=f"fav_remove_{news_id}"):
-                    favorites.remove(news_id)
-                    user_data["favorites"] = favorites
-                    users[SESSION.username] = user_data
-                    save_users(users)
-                    st.rerun()
+    # --- PROFIL ---
+    st.markdown(f'<h3>{get_text("profile")}</h3>', unsafe_allow_html=True)
+    user_email = st.session_state.get("username", "Unbekannt")
+    st.write(f"**E-Mail:** {user_email}")
+    with st.expander(get_text("change_password")):
+        pwd1 = st.text_input(get_text("password"), type="password", key="dash_pwd1")
+        pwd2 = st.text_input(get_text("confirm_password"), type="password", key="dash_pwd2")
+        if st.button(get_text("save_password_dash"), key="dash_pwd_btn"):
+            if pwd1 != pwd2:
+                st.error(get_text("passwords_dont_match"))
+            elif len(pwd1) < 6:
+                st.error(get_text("password_too_short"))
             else:
-                if st.button("Zu Favoriten", key=f"fav_add_{news_id}"):
-                    favorites.append(news_id)
-                    user_data["favorites"] = favorites
-                    users[SESSION.username] = user_data
-                    save_users(users)
-                    st.rerun()
-        st.markdown("---")
+                users = json.loads(USER_FILE.read_text())
+                users[user_email] = hashlib.sha256(pwd1.encode()).hexdigest()
+                save_users(users)
+                st.success(get_text("password_saved"))
+    st.markdown("<hr style='margin:1.5em 0; border: none; border-top: 1.5px solid #e6f0fa;'>", unsafe_allow_html=True)
+
+    # --- ABONNEMENT ---
+    st.markdown(f'<h3>{get_text("subscription")}</h3>', unsafe_allow_html=True)
+    abo_status = st.session_state.get("user_plan", "trial")
+    status_map = {
+        "paid": (get_text("active"), "active"),
+        "trial": (get_text("trial"), "trial"),
+        "cancelled": (get_text("cancelled"), "cancelled")
+    }
+    status_text, status_class = status_map.get(abo_status, (get_text("unknown"), ""))
+    st.markdown(f'<div class="abo-status {status_class}">{get_text("status")} {status_text}</div>', unsafe_allow_html=True)
+    if abo_status != "cancelled":
+        if st.button(get_text("cancel_subscription"), key="dash_cancel_btn"):
+            st.session_state.user_plan = "cancelled"
+            st.success(get_text("subscription_cancelled"))
+    else:
+        st.info(get_text("subscription_already_cancelled"))
+    st.markdown("<hr style='margin:1.5em 0; border: none; border-top: 1.5px solid #e6f0fa;'>", unsafe_allow_html=True)
+
+    # --- SUPPORT ---
+    st.markdown(f'<h3>{get_text("support")}</h3>', unsafe_allow_html=True)
+    with st.form("support_form"):
+        subject = st.text_input(get_text("subject"), key="support_subject")
+        message = st.text_area(get_text("message"), key="support_message")
+        submitted = st.form_submit_button(get_text("send"))
+        if submitted:
+            if not subject or not message:
+                st.error(get_text("fill_all_fields"))
+            else:
+                st.success(get_text("message_sent"))
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# --- Mittlere Spalte: News Cards ---
+with mid_col:
+    st.markdown('<div class="content-col">', unsafe_allow_html=True)
+    data_file = Path("data/news_analysis_results.csv")
+    df = pd.read_csv(data_file) if data_file.exists() else pd.DataFrame()
+    # Mapping für deutsche zu englischen Confidence-Werten
+    confidence_map = {"hoch": "high", "mittel": "medium", "niedrig": "low"}
+    if "confidence" in df.columns:
+        df["confidence"] = df["confidence"].replace(confidence_map)
+    if df.empty:
+        st.info("No news available.")
+    else:
+        df["publishedAt"] = pd.to_datetime(df["publishedAt"], errors="coerce")
+        st.markdown("""
+        <style>
+        .news-card {background:#fff; border:2px solid #e6f0fa; border-radius:18px; box-shadow:0 4px 18px rgba(11,37,69,0.07); padding:2rem 1.5rem 1.2rem 1.5rem; margin:2.2rem 0; transition:box-shadow 0.2s, transform 0.2s;}
+        .news-card:hover {box-shadow:0 8px 32px rgba(11,37,69,0.13); transform:translateY(-4px) scale(1.01);}
+        .badge {display:inline-block; border-radius:12px; padding:0.2em 0.9em; font-size:1em; font-weight:600; margin-right:0.5em; margin-bottom:0.3em;}
+        .impact-badge {background:#e6f0fa; color:#0b2545;}
+        .impact-badge.high {background:#d1f5e0; color:#1a7f3c;}
+        .impact-badge.mid {background:#fff7d6; color:#bfa100;}
+        .impact-badge.low {background:#ffe0e0; color:#b80000;}
+        .confidence-badge {background:#e6f0fa; color:#0b2545;}
+        .confidence-badge.high {background:#d1f5e0; color:#1a7f3c;}
+        .confidence-badge.mid {background:#fff7d6; color:#bfa100;}
+        .confidence-badge.low {background:#ffe0e0; color:#b80000;}
+        .market-chip {background:#f0f4fa; color:#0b2545; border-radius:10px; padding:0.2em 0.8em; font-size:0.98em; margin-right:0.4em; margin-bottom:0.2em; display:inline-block;}
+        .news-title {font-size:1.35em; font-weight:700; color:#0b2545; margin-bottom:0.2em;}
+        .news-date {color:#888; font-size:0.98em; margin-bottom:0.7em;}
+        .news-summary {margin:0.7em 0 1.1em 0; color:#222;}
+        .news-divider {margin:1.5em 0 0.5em 0; border:none; border-top:1px solid #e6f0fa;}
+        .news-btn {background:#0b2545; color:#fff; border:none; border-radius:8px; padding:0.5em 1.2em; font-weight:600; font-size:1em; margin-top:0.7em; transition:background 0.2s; cursor:pointer;}
+        .news-btn:hover {background:#1b325c;}
+        </style>
+        """, unsafe_allow_html=True)
+        # Englische Filter-Optionen
+        conf_map = {"All": ["high", "medium", "low"], "High": ["high"], "Medium": ["medium"], "Low": ["low"]}
+        confidence_options = ["All", "High", "Medium", "Low"]
+        # Filter UI
+        impact_min, impact_max = st.session_state.get('impact_filter_news', (-10, 10))
+        confidence_selected = st.session_state.get('confidence_level_news', 'All')
+        allowed_conf = conf_map[confidence_selected]
+        for _, r in df.iterrows():
+            # Filter: Impact Score im Bereich?
+            impact = r.get('impact', '-')
+            try:
+                if impact is not None and impact != '-' and impact != '':
+                    impact_val = float(impact)
+                    if not (impact_min <= impact_val <= impact_max):
+                        continue  # Nachricht überspringen
+            except Exception:
+                pass
+            # Filter: Confidence
+            confidence = str(r.get('confidence', '-') or '').lower()
+            if confidence not in allowed_conf:
+                continue
+            # Impact Score Badge Farbe
+            try:
+                if impact is not None and impact != '-' and impact != '':
+                    impact_val = float(impact)
+                    if impact_val >= 4:
+                        impact_class = 'high'
+                    elif impact_val <= -4:
+                        impact_class = 'low'
+                    else:
+                        impact_class = 'mid'
+                else:
+                    impact_class = ''
+            except Exception:
+                impact_class = ''
+            # Confidence Badge Farbe
+            if 'high' in confidence:
+                conf_class = 'high'
+            elif 'medium' in confidence:
+                conf_class = 'mid'
+            elif 'low' in confidence:
+                conf_class = 'low'
+            else:
+                conf_class = ''
+            # Märkte Chips
+            markets = r.get('markets','-')
+            if isinstance(markets, str):
+                # Versuche, die Liste aus dem String zu extrahieren
+                if markets.startswith('[') and markets.endswith(']'):
+                    import ast
+                    try:
+                        market_list = ast.literal_eval(markets)
+                    except Exception:
+                        market_list = [m.strip() for m in markets.split(',') if m.strip()]
+                else:
+                    market_list = [m.strip() for m in markets.split(',') if m.strip()]
+            else:
+                market_list = []
+            # Datum robust formatieren
+            published_at = r.get('publishedAt', None)
+            date_str = ''
+            if published_at is not None:
+                try:
+                    if hasattr(published_at, 'strftime'):
+                        date_str = published_at.strftime('%d.%m.%Y %H:%M')
+                    elif isinstance(published_at, (list, tuple, np.ndarray)):
+                        date_str = pd.to_datetime(published_at[0]).strftime('%d.%m.%Y %H:%M')
+                    elif isinstance(published_at, pd.Series):
+                        date_str = pd.to_datetime(published_at.iloc[0]).strftime('%d.%m.%Y %H:%M')
+                    else:
+                        date_str = pd.to_datetime(published_at).strftime('%d.%m.%Y %H:%M')
+                except Exception:
+                    date_str = ''
+            # Card-Layout (alles englisch)
+            confidence_val = r.get('confidence', '-')
+            confidence_str = str(confidence_val) if confidence_val is not None else '-'
+            title_val = r.get('title', '') if 'title' in r else ''
+            description_val = r.get('description', '') if 'description' in r else ''
+            patterns_val = r.get('patterns', '-') if 'patterns' in r else '-'
+            explanation_val = r.get('explanation', '-') if 'explanation' in r else '-'
+            st.markdown(f"""
+            <div class='news-card'>
+                <div class='news-title'>{title_val}</div>
+                <div class='news-date'>{date_str}</div>
+                <div style='margin-bottom:0.7em;'>
+                    <span class='badge impact-badge {impact_class}'>Impact Score: {impact}</span>
+                    <span class='badge confidence-badge {conf_class}'>Confidence Level: {confidence_str.capitalize()}</span>
+                    {''.join([f"<span class='market-chip'>{m}</span>" for m in market_list])}
+                </div>
+                <div class='news-summary'>{description_val}</div>
+                <details>
+                    <summary style='font-weight:600; color:#0b2545; cursor:pointer;'>Learn More</summary>
+                    <div style='margin-top:1em;'>
+                        <b>Historical Patterns:</b> {patterns_val}<br>
+                        <b>Analysis:</b> {explanation_val}
+                    </div>
+                </details>
+            </div>
+            """, unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+# --- Rechte Spalte: Filter ---
+with right_col:
+    # st.markdown("<h4>Filter</h4>", unsafe_allow_html=True) # Entfernt
+    # impact_min, impact_max = st.slider("Impact Score", -10, 10, (st.session_state.impact_min, st.session_state.impact_max), key="impact_filter") # Entfernt
+    # Filterwerte in session_state speichern
+    # st.session_state.impact_min = impact_min
+    # st.session_state.impact_max = impact_max
+    st.markdown("<div style='height:3em;'></div>", unsafe_allow_html=True)  # Abstand nach unten
+
+```
+
+# === Passwort vergessen ===
+
+if view == "forgot_password":
+st.markdown("""
+<style>
+.reset-card {
+background: none !important;
+border: none !important;
+box-shadow: none !important;
+padding: 0;
+margin: 3rem auto 2rem auto;
+max-width: 370px;
+min-width: 270px;
+display: flex;
+flex-direction: column;
+align-items: center;
+}
+.reset-card h2 {
+color:#0b2545;
+font-size:1.7em;
+font-weight:700;
+margin-bottom:1.2em;
+text-align:center;
+}
+.reset-card .subtitle {
+color: #222;
+font-size: 1.1em;
+margin-bottom: 1.5em;
+text-align: center;
+opacity: 0.85;
+}
+.reset-card .stTextInput, .reset-card .stTextInput>div, .reset-card .stTextInput>div>div {
+width: 120px !important;
+max-width: 120px !important;
+min-width: 60px !important;
+}
+.reset-card .stTextInput>div>div>input {
+width: 120px !important;
+max-width: 120px !important;
+min-width: 60px !important;
+}
+.reset-card .stButton>button {
+width:100%;
+font-size:1.1em;
+padding:0.5em 0;
+border-radius:8px;
+margin-top:1.2em;
+}
+</style>
+""", unsafe_allow_html=True)
+cols = st.columns([2,1,2])
+with cols[1]:
+st.markdown('<div class="reset-card">', unsafe_allow_html=True)
+st.markdown(f'<h2>{get_text("reset_password")}</h2>', unsafe_allow_html=True)
+st.markdown(f'<div class="subtitle">{get_text("reset_password_desc")}</div>', unsafe_allow_html=True)
+email = st.text_input(get_text("email"))
+if st.button(get_text("request_reset")):
+users = json.loads(USER_FILE.read_text())
+# Immer gleiche Meldung, um Enumeration zu verhindern
+if email not in users:
+st.success(get_text("reset_sent"))
+else:
+token = generate_reset_token(email)
+send_reset_email(email, token)
+st.success(get_text("reset_sent"))
+st.markdown('</div>', unsafe_allow_html=True)
+st.stop()
+
+# === Passwort zurücksetzen ===
+
+if view == "reset_password":
+params = st.experimental_get_query_params()
+token = params.get("token", [None])[0]
+email = verify_reset_token(token) if token else None
+if not email:
+st.error(get_text("invalid_link"))
+st.stop()
+st.markdown("""
+<style>
+.reset-card {
+background: none !important;
+border: none !important;
+box-shadow: none !important;
+padding: 0;
+margin: 3rem auto 2rem auto;
+max-width: 370px;
+min-width: 270px;
+display: flex;
+flex-direction: column;
+align-items: center;
+}
+.reset-card h2 {
+color:#0b2545;
+font-size:1.7em;
+font-weight:700;
+margin-bottom:1.2em;
+text-align:center;
+}
+.reset-card .stTextInput, .reset-card .stTextInput>div, .reset-card .stTextInput>div>div {
+width: 120px !important;
+max-width: 120px !important;
+min-width: 60px !important;
+}
+.reset-card .stTextInput>div>div>input {
+width: 120px !important;
+max-width: 120px !important;
+min-width: 60px !important;
+}
+.reset-card .stButton>button {
+width:100%;
+font-size:1.1em;
+padding:0.5em 0;
+border-radius:8px;
+margin-top:1.2em;
+}
+.reset-card label {
+width:100%;
+text-align:left;
+}
+</style>
+""", unsafe_allow_html=True)
+cols = st.columns([2,1,2])
+with cols[1]:
+st.markdown('<div class="reset-card">', unsafe_allow_html=True)
+st.markdown(f'<h2>{get_text("new_password")}</h2>', unsafe_allow_html=True)
+pwd1 = st.text_input(get_text("password"), type="password")
+pwd2 = st.text_input(get_text("confirm_password"), type="password")
+if st.button(get_text("save_password")):
+if pwd1 != pwd2:
+st.error(get_text("passwords_dont_match"))
+elif len(pwd1) < 6:
+st.error(get_text("password_too_short"))
+else:
+users = json.loads(USER_FILE.read_text())
+users[email] = hashlib.sha256(pwd1.encode()).hexdigest()
+save_users(users)
+delete_reset_token(token)
+st.success(get_text("password_changed"))
+st.markdown(f'<a href="/?view=login" class="button">{get_text("to_login")}</a>', unsafe_allow_html=True)
+st.markdown('</div>', unsafe_allow_html=True)
+st.stop()
