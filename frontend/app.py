@@ -287,15 +287,25 @@ def save_users(users: dict):
     USER_FILE.write_text(json.dumps(users))
 
 def redirect_to(view: str):
-    st.experimental_set_query_params(view=view)
+    st.query_params.update({"view": view})
 
 # === Globales CSS inklusive Landing-Page & Dark-Sidebar ===
 
 st.markdown("""
 <style>
-/* Grundlayout */
-html, body, .main, .block-container { background: #fff; color: #000; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
-h1,h2,h3 { color: #0b2545; margin: 0; }
+/* Enhanced Grundlayout with better typography */
+html, body, .main, .block-container { 
+    background: #fff; 
+    color: #000; 
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+    line-height: 1.6;
+}
+h1,h2,h3 { 
+    color: #0b2545; 
+    margin: 0; 
+    font-weight: 700;
+    letter-spacing: -0.025em;
+}
 
 /* Landing-Page Hintergrund-Gradient */
 .stApp { background: linear-gradient(135deg, #0b2545 0%, #1b325c 50%, #2a4a7a 100%); }
@@ -304,8 +314,28 @@ h1,h2,h3 { color: #0b2545; margin: 0; }
 section[data-testid="stSidebar"] { background: #0b2545 !important; color: #fff !important; }
 section[data-testid="stSidebar"] * { color: #fff !important; }
 
-/* Buttons einheitlich - Standard Streamlit Button Style */
-button, .stButton>button { background: #0b2545 !important; color: #fff !important; border:none!important; border-radius:8px!important; padding:8px 16px!important; font-weight:600!important; }
+/* Enhanced Buttons with smooth animations */
+button, .stButton>button { 
+    background: #0b2545 !important; 
+    color: #fff !important; 
+    border: none !important; 
+    border-radius: 12px !important; 
+    padding: 12px 24px !important; 
+    font-weight: 600 !important;
+    font-size: 0.95em !important;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    box-shadow: 0 2px 8px rgba(11, 37, 69, 0.15) !important;
+    cursor: pointer !important;
+}
+button:hover, .stButton>button:hover {
+    background: #1b325c !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 4px 16px rgba(11, 37, 69, 0.25) !important;
+}
+button:active, .stButton>button:active {
+    transform: translateY(0px) !important;
+    box-shadow: 0 2px 8px rgba(11, 37, 69, 0.15) !important;
+}
 input, textarea {
     background: #fff !important;
     border: 2px solid #0b2545 !important;
@@ -558,7 +588,7 @@ div[data-testid="column"]:nth-of-type(2) {
 
 # === Header mit Navigation ===
 
-params = st.experimental_get_query_params()
+params = dict(st.query_params)
 view = params.get("view", ["landing"])[0]
 
 # -- HEADER MIT HAMBURGER-BUTTON (nur auf News-Seite) ---
@@ -597,7 +627,7 @@ if 'logout' in params:
     SESSION.logged_in = False
     SESSION.username = ''
     SESSION.user_plan = ''
-    st.experimental_set_query_params(view="landing")
+    st.query_params.update({"view": "landing"})
     st.rerun()
 
 # === Landing-Page ===
@@ -1085,7 +1115,7 @@ if view == "login":
                 st.error(get_text("invalid_credentials"))
         
         if st.button(get_text("forgot_password"), key="forgot_pwd_btn"):
-            st.experimental_set_query_params(view=["forgot_password"])
+            st.query_params.update({"view": "forgot_password"})
             st.rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1198,7 +1228,7 @@ def translate_text(text, target_lang):
 if view in ["news", "Alle Nachrichten"]:
     # Weiterleitung für nicht eingeloggte Nutzer
     if not SESSION.logged_in:
-        st.experimental_set_query_params(view="login")
+        st.query_params.update({"view": "login"})
         st.rerun()
         st.stop()
     
@@ -1398,11 +1428,31 @@ if view in ["news", "Alle Nachrichten"]:
                 box-shadow:0 4px 18px rgba(11,37,69,0.07); 
                 padding:2rem 1.5rem 1.2rem 1.5rem; 
                 margin:2.2rem 0; 
-                transition:box-shadow 0.2s, transform 0.2s;
+                transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+                position: relative;
+                overflow: hidden;
+            }
+            .news-card::before {
+                content: '';
+                position: absolute;
+                top: 0;
+                left: -100%;
+                width: 100%;
+                height: 100%;
+                background: linear-gradient(90deg, transparent, rgba(11,37,69,0.03), transparent);
+                transition: left 0.6s;
+            }
+            .news-card:hover::before {
+                left: 100%;
             }
             .news-card:hover {
-                box-shadow:0 8px 32px rgba(11,37,69,0.13); 
-                transform:translateY(-4px) scale(1.01);
+                box-shadow:0 12px 40px rgba(11,37,69,0.15); 
+                transform:translateY(-6px) scale(1.02);
+                border-color: #0b2545;
+            }
+            .news-card:active {
+                transform:translateY(-2px) scale(1.01);
+                transition: all 0.1s ease;
             }
             .badge {
                 display:inline-block; 
@@ -1688,7 +1738,7 @@ if view == "forgot_password":
 
 # === Passwort zurücksetzen ===
 if view == "reset_password":
-    params = st.experimental_get_query_params()
+    params = dict(st.query_params)
     token = params.get("token", [None])[0]
     email = verify_reset_token(token) if token else None
     
