@@ -616,53 +616,20 @@ if show_hamburger:
     header_html += "<span id='dashboard-hamburger-placeholder'></span>"
 
 header_html += "</div><div style='display:flex;align-items:center;'>"
-header_html += "</div></div>"
-st.markdown(header_html, unsafe_allow_html=True)
-
-# Navigation buttons using Streamlit
-nav_col1, nav_col2, nav_col3, nav_col4, nav_col5, nav_col6 = st.columns([1,1,1,1,1,1])
-
-with nav_col1:
-    if st.button(get_text('home'), key="nav_home"):
-        redirect_to("landing")
-        st.rerun()
-
-with nav_col2:
-    if st.button(get_text('news_analysis'), key="nav_news"):
-        redirect_to("news")
-        st.rerun()
-
-with nav_col3:
-    if st.button(get_text('features'), key="nav_features"):
-        redirect_to("funktionen")
-        st.rerun()
+header_html += f"<a href='/?view=landing'>{get_text('home')}</a>"
+header_html += f"<a href='/?view=news'>{get_text('news_analysis')}</a>"
+header_html += f"<a href='/?view=funktionen'>{get_text('features')}</a>"
 
 if not SESSION.logged_in:
-    with nav_col4:
-        if st.button(get_text('login'), key="nav_login"):
-            redirect_to("login")
-            st.rerun()
-    
-    with nav_col5:
-        if st.button(get_text('register'), key="nav_register"):
-            redirect_to("register")
-            st.rerun()
-    
-    with nav_col6:
-        if st.button(get_text('free_trial'), key="nav_trial"):
-            redirect_to("register")
-            st.rerun()
+    header_html += f"<a href='/?view=login' class='button'>{get_text('login')}</a>"
+    header_html += f"<a href='/?view=register' class='button' style='margin-left:0.7em;'>{get_text('register')}</a>"
+    header_html += f"<a href='/?view=register' class='button' style='margin-left:0.7em;'>{get_text('free_trial')}</a>"
 else:
-    with nav_col4:
-        st.write(f"**{SESSION.username}**")
-    
-    with nav_col5:
-        if st.button(get_text('logout'), key="nav_logout"):
-            SESSION.logged_in = False
-            SESSION.username = ''
-            SESSION.user_plan = ''
-            redirect_to("landing")
-            st.rerun()
+    header_html += f"<span style='margin-left:1.5rem; color:#fff; font-weight:600;'>{SESSION.username}</span>"
+    header_html += f"<a href='/?logout=1' class='button' style='margin-left:1.5rem;'>{get_text('logout')}</a>"
+
+header_html += "</div></div>"
+st.markdown(header_html, unsafe_allow_html=True)
 st.markdown("<div style='margin-bottom:2rem;'></div>", unsafe_allow_html=True)
 
 # Logout-Logik
