@@ -287,7 +287,12 @@ def save_users(users: dict):
     USER_FILE.write_text(json.dumps(users))
 
 def redirect_to(view: str):
-    st.query_params.update({"view": view})
+    try:
+        # New Streamlit API (1.28+)
+        st.query_params.update({"view": view})
+    except AttributeError:
+        # Fallback for older Streamlit versions
+        st.experimental_set_query_params(view=view)
 
 # === Globales CSS inklusive Landing-Page & Dark-Sidebar ===
 
@@ -588,7 +593,12 @@ div[data-testid="column"]:nth-of-type(2) {
 
 # === Header mit Navigation ===
 
-params = dict(st.query_params)
+try:
+    # New Streamlit API (1.28+)
+    params = dict(st.query_params)
+except AttributeError:
+    # Fallback for older Streamlit versions
+    params = st.experimental_get_query_params()
 view = params.get("view", ["landing"])[0]
 
 # -- HEADER MIT HAMBURGER-BUTTON (nur auf News-Seite) ---
@@ -1115,7 +1125,12 @@ if view == "login":
                 st.error(get_text("invalid_credentials"))
         
         if st.button(get_text("forgot_password"), key="forgot_pwd_btn"):
-            st.query_params.update({"view": "forgot_password"})
+            try:
+                # New Streamlit API (1.28+)
+                st.query_params.update({"view": "forgot_password"})
+            except AttributeError:
+                # Fallback for older Streamlit versions
+                st.experimental_set_query_params(view="forgot_password")
             st.rerun()
         
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1228,7 +1243,12 @@ def translate_text(text, target_lang):
 if view in ["news", "Alle Nachrichten"]:
     # Weiterleitung für nicht eingeloggte Nutzer
     if not SESSION.logged_in:
-        st.query_params.update({"view": "login"})
+        try:
+            # New Streamlit API (1.28+)
+            st.query_params.update({"view": "login"})
+        except AttributeError:
+            # Fallback for older Streamlit versions
+            st.experimental_set_query_params(view="login")
         st.rerun()
         st.stop()
     
