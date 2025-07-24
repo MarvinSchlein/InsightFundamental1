@@ -616,20 +616,53 @@ if show_hamburger:
     header_html += "<span id='dashboard-hamburger-placeholder'></span>"
 
 header_html += "</div><div style='display:flex;align-items:center;'>"
-header_html += f"<a href='/?view=landing'>{get_text('home')}</a>"
-header_html += f"<a href='/?view=news'>{get_text('news_analysis')}</a>"
-header_html += f"<a href='/?view=funktionen'>{get_text('features')}</a>"
-
-if not SESSION.logged_in:
-    header_html += f"<a href='/?view=login' class='button'>{get_text('login')}</a>"
-    header_html += f"<a href='/?view=register' class='button' style='margin-left:0.7em;'>{get_text('register')}</a>"
-    header_html += f"<a href='/?view=register' class='button' style='margin-left:0.7em;'>{get_text('free_trial')}</a>"
-else:
-    header_html += f"<span style='margin-left:1.5rem; color:#fff; font-weight:600;'>{SESSION.username}</span>"
-    header_html += f"<a href='/?logout=1' class='button' style='margin-left:1.5rem;'>{get_text('logout')}</a>"
-
 header_html += "</div></div>"
 st.markdown(header_html, unsafe_allow_html=True)
+
+# Navigation buttons using Streamlit
+nav_col1, nav_col2, nav_col3, nav_col4, nav_col5, nav_col6 = st.columns([1,1,1,1,1,1])
+
+with nav_col1:
+    if st.button(get_text('home'), key="nav_home"):
+        redirect_to("landing")
+        st.rerun()
+
+with nav_col2:
+    if st.button(get_text('news_analysis'), key="nav_news"):
+        redirect_to("news")
+        st.rerun()
+
+with nav_col3:
+    if st.button(get_text('features'), key="nav_features"):
+        redirect_to("funktionen")
+        st.rerun()
+
+if not SESSION.logged_in:
+    with nav_col4:
+        if st.button(get_text('login'), key="nav_login"):
+            redirect_to("login")
+            st.rerun()
+    
+    with nav_col5:
+        if st.button(get_text('register'), key="nav_register"):
+            redirect_to("register")
+            st.rerun()
+    
+    with nav_col6:
+        if st.button(get_text('free_trial'), key="nav_trial"):
+            redirect_to("register")
+            st.rerun()
+else:
+    with nav_col4:
+        st.write(f"**{SESSION.username}**")
+    
+    with nav_col5:
+        if st.button(get_text('logout'), key="nav_logout"):
+            SESSION.logged_in = False
+            SESSION.username = ''
+            SESSION.user_plan = ''
+            redirect_to("landing")
+            st.rerun()
 st.markdown("<div style='margin-bottom:2rem;'></div>", unsafe_allow_html=True)
 
 # Logout-Logik
@@ -725,9 +758,15 @@ if view == "landing":
         <p style='color:#111; font-size:1.3em; margin-bottom:2.5rem;'>
             {get_text('hero_subtitle')}
         </p>
-        <div style='display:flex; justify-content:center;'><a href='/?view=funktionen' class='cta-btn'>{get_text('discover_features')}</a></div>
     </div>
     """, unsafe_allow_html=True)
+    
+    # Streamlit button for navigation
+    col1, col2, col3 = st.columns([1,1,1])
+    with col2:
+        if st.button(get_text('discover_features'), key="hero_discover_btn"):
+            redirect_to("funktionen")
+            st.rerun()
     st.markdown("<br>", unsafe_allow_html=True)
 
     # Features-Bereich
@@ -800,7 +839,11 @@ if view == "landing":
         """, unsafe_allow_html=True)
 
     # Call-to-Action unten
-    st.markdown(f"<div style='text-align:center; margin:3rem 0;'><a href='/?view=register' class='cta-btn'>{get_text('start_free')}</a></div>", unsafe_allow_html=True)
+    col1, col2, col3 = st.columns([1,1,1])
+    with col2:
+        if st.button(get_text('start_free'), key="cta_start_free_btn"):
+            redirect_to("register")
+            st.rerun()
     st.stop()
 
 # === Funktionen-Seite ===
