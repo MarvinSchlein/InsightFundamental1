@@ -141,7 +141,16 @@ TEXTS = {
         # Language Selection
         "language": "Language",
         "german": "Deutsch",
-        "english": "English"
+        "english": "English",
+
+        # Pricing
+        "pricing": "Pricing",
+        "pricing_title": "Simple, Transparent Pricing",
+        "pricing_subtitle": "Get access to all features with our monthly subscription",
+        "monthly_price": "19.99€",
+        "per_month": "per month",
+        "get_started": "Get Started",
+        "all_features_included": "All features included:"
     },
     "de": {
         # Navigation
@@ -256,7 +265,16 @@ TEXTS = {
         # Language Selection
         "language": "Sprache",
         "german": "Deutsch",
-        "english": "Englisch"
+        "english": "Englisch",
+
+        # Pricing
+        "pricing": "Preise",
+        "pricing_title": "Einfache, transparente Preise",
+        "pricing_subtitle": "Erhalte Zugang zu allen Funktionen mit unserem monatlichen Abonnement",
+        "monthly_price": "19,99€",
+        "per_month": "pro Monat",
+        "get_started": "Jetzt starten",
+        "all_features_included": "Alle Funktionen enthalten:"
     }
 }
 
@@ -811,7 +829,6 @@ if view == "landing":
         if st.button(get_text('start_free'), key="cta_start_free_btn"):
             redirect_to("register")
             st.rerun()
-    st.stop()
 
 # === Funktionen-Seite ===
 if view == "funktionen":
@@ -1052,9 +1069,7 @@ if view == "funktionen":
     </div>
     """, unsafe_allow_html=True)
 
-    st.stop()
-
-    # === Login ===
+# === Login ===
 
 if view == "login":
     st.markdown("""
@@ -1764,6 +1779,883 @@ if view == "forgot_password":
                 st.success(get_text("reset_sent"))
         
         st.markdown('</div>', unsafe_allow_html=True)
+    st.stop()
+
+# === Footer (appears on all pages) ===
+st.markdown("""
+<style>
+/* Footer Styling */
+.website-footer {
+    background: #0b2545;
+    color: #fff;
+    padding: 2rem 1rem;
+    margin-top: 4rem;
+    border-top: 3px solid #1b325c;
+}
+
+.footer-content {
+    max-width: 1200px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5rem;
+}
+
+.footer-links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 2rem;
+    align-items: center;
+}
+
+.footer-links a {
+    color: #fff;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.95em;
+    transition: all 0.3s ease;
+    padding: 0.5rem 0;
+}
+
+.footer-links a:hover {
+    color: #4a9eff;
+    transform: translateY(-2px);
+}
+
+.footer-social {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.footer-social a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    color: #fff;
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.95em;
+    transition: all 0.3s ease;
+    padding: 0.5rem;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.footer-social a:hover {
+    color: #4a9eff;
+    background: rgba(74, 158, 255, 0.2);
+    transform: translateY(-2px);
+}
+
+.footer-divider {
+    width: 100%;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.2);
+    margin: 0.5rem 0;
+}
+
+/* X (Twitter) Icon SVG */
+.x-icon {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .footer-links {
+        flex-direction: column;
+        gap: 1rem;
+        text-align: center;
+    }
+    
+    .footer-content {
+        gap: 1rem;
+    }
+    
+    .website-footer {
+        padding: 1.5rem 1rem;
+        margin-top: 2rem;
+    }
+}
+</style>
+
+<footer class="website-footer">
+    <div class="footer-content">
+        <div class="footer-links">
+            <a href="/?view=impressum">Impressum</a>
+            <a href="/?view=datenschutz">Datenschutzerklärung</a>
+            <a href="/?view=agb">AGB</a>
+            <a href="/?view=nutzungsbedingungen">Nutzungsbedingungen</a>
+            <a href="/?view=cookie-hinweis">Cookie-Hinweis</a>
+        </div>
+    </div>
+</footer>
+""", unsafe_allow_html=True)
+
+# === Legal Document Pages ===
+
+# Impressum Page
+if view == "impressum":
+    st.markdown("""
+    <style>
+    .stApp, .block-container, section[data-testid="stAppViewContainer"] > div:first-child {
+        background: #fff !important;
+    }
+    .header-nav {
+        background: #fff !important;
+        color: #0b2545 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+    }
+    .header-nav h1, .header-nav a, .header-nav a.button {
+        color: #0b2545 !important;
+        background: none !important;
+    }
+    .header-nav a.button {
+        background: #0b2545 !important;
+        color: #fff !important;
+        border-radius: 25px !important;
+        font-weight: 700;
+        box-shadow: 0 4px 15px rgba(11,37,69,0.3) !important;
+        border: none !important;
+        padding: 1rem 2rem !important;
+    }
+    .header-nav a.button:hover {
+        background: #1b325c !important;
+        color: #fff !important;
+        box-shadow: 0 6px 20px rgba(11,37,69,0.4) !important;
+    }
+    .legal-content {
+        max-width: 800px;
+        margin: 2rem auto;
+        padding: 2rem;
+        background: #fff;
+        border: 2px solid #0b2545;
+        border-radius: 16px;
+        box-shadow: 0 4px 24px rgba(11,37,69,0.08);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif !important;
+    }
+    .legal-content h1 {
+        color: #0b2545;
+        font-size: 2.5em;
+        margin-bottom: 2rem;
+        text-align: center;
+        font-family: inherit !important;
+    }
+    .legal-content h2 {
+        color: #0b2545;
+        font-size: 1.5em;
+        margin: 2rem 0 1rem 0;
+        font-family: inherit !important;
+    }
+    .legal-content p, .legal-content li {
+        color: #111;
+        line-height: 1.7;
+        margin-bottom: 1rem;
+        font-family: inherit !important;
+        font-size: 1rem;
+    }
+    .legal-content strong {
+        color: #0b2545;
+        font-weight: 700;
+        font-family: inherit !important;
+    }
+    .legal-content a {
+        color: #0b2545;
+        text-decoration: underline;
+    }
+    .legal-content a:hover {
+        color: #1b325c;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Use native Streamlit components for better text rendering
+    st.markdown("# Impressum", unsafe_allow_html=True)
+    
+    st.markdown("**Angaben gemäß § 5 TMG**", unsafe_allow_html=True)
+    
+    st.markdown("""
+    **InsightFundamental**  
+    Marvin Schlein  
+    Hengstbachstraße 19  
+    63303 Dreieich  
+    Deutschland
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
+    **Kontakt:**  
+    Telefon: +49 (0)175 7685390  
+    E-Mail: support@insightfundamental.com  
+    Website: [https://insightfundamental.com](https://insightfundamental.com)
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
+    **Verantwortlich für den Inhalt nach § 55 Abs. 2 RStV:**  
+    Marvin Schlein  
+    Anschrift wie oben
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
+    **Hinweis:**  
+    Als Einzelunternehmer bin ich aktuell nicht im Handelsregister eingetragen. Eine Umsatzsteuer-ID liegt derzeit nicht vor.
+    """, unsafe_allow_html=True)
+    
+    st.markdown("""
+    **Online-Streitbeilegung gemäß Art. 14 Abs. 1 ODR-VO:**  
+    Die Europäische Kommission stellt eine Plattform zur Online-Streitbeilegung (OS) bereit:  
+    [https://ec.europa.eu/consumers/odr/](https://ec.europa.eu/consumers/odr/)
+    """, unsafe_allow_html=True)
+    
+    st.markdown("Ich bin nicht verpflichtet oder bereit, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.", unsafe_allow_html=True)
+    
+    # Footer for legal pages
+    st.markdown("""
+    <style>
+    /* Footer Styling */
+    .website-footer {
+        background: #0b2545;
+        color: #fff;
+        padding: 2rem 1rem;
+        margin-top: 4rem;
+        border-top: 3px solid #1b325c;
+    }
+
+    .footer-content {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.5rem;
+    }
+
+    .footer-links {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 2rem;
+        align-items: center;
+    }
+
+    .footer-links a {
+        color: #fff;
+        text-decoration: none;
+        font-weight: 500;
+        font-size: 0.95em;
+        transition: all 0.3s ease;
+        padding: 0.5rem 0;
+    }
+
+    .footer-links a:hover {
+        color: #4a9eff;
+        transform: translateY(-2px);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .footer-links {
+            flex-direction: column;
+            gap: 1rem;
+            text-align: center;
+        }
+        
+        .footer-content {
+            gap: 1rem;
+        }
+        
+        .website-footer {
+            padding: 1.5rem 1rem;
+            margin-top: 2rem;
+        }
+    }
+    </style>
+
+    <footer class="website-footer">
+        <div class="footer-content">
+            <div class="footer-links">
+                <a href="/?view=impressum">Impressum</a>
+                <a href="/?view=datenschutz">Datenschutzerklärung</a>
+                <a href="/?view=agb">AGB</a>
+                <a href="/?view=nutzungsbedingungen">Nutzungsbedingungen</a>
+                <a href="/?view=cookie-hinweis">Cookie-Hinweis</a>
+            </div>
+        </div>
+    </footer>
+    """, unsafe_allow_html=True)
+    
+    st.stop()
+
+# Datenschutzerklärung Page
+if view == "datenschutz":
+    st.markdown("""
+    <style>
+    .stApp, .block-container, section[data-testid="stAppViewContainer"] > div:first-child {
+        background: #fff !important;
+    }
+    .header-nav {
+        background: #fff !important;
+        color: #0b2545 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+    }
+    .header-nav h1, .header-nav a, .header-nav a.button {
+        color: #0b2545 !important;
+        background: none !important;
+    }
+    .header-nav a.button {
+        background: #0b2545 !important;
+        color: #fff !important;
+        border-radius: 25px !important;
+        font-weight: 700;
+        box-shadow: 0 4px 15px rgba(11,37,69,0.3) !important;
+        border: none !important;
+        padding: 1rem 2rem !important;
+    }
+    .header-nav a.button:hover {
+        background: #1b325c !important;
+        color: #fff !important;
+        box-shadow: 0 6px 20px rgba(11,37,69,0.4) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Use native Streamlit components for better text rendering
+    st.markdown("# Datenschutzerklärung", unsafe_allow_html=True)
+    
+    st.markdown("## 1. Verantwortlicher", unsafe_allow_html=True)
+    st.markdown("""
+    **Marvin Schlein**  
+    InsightFundamental  
+    Hengstbachstraße 19  
+    63303 Dreieich  
+    Deutschland  
+    E-Mail: support@insightfundamental.com
+    """, unsafe_allow_html=True)
+    
+    st.markdown("## 2. Allgemeine Hinweise zur Datenverarbeitung", unsafe_allow_html=True)
+    st.markdown("Der Schutz Ihrer persönlichen Daten ist mir ein besonderes Anliegen. Ich verarbeite Ihre Daten daher ausschließlich auf Grundlage der gesetzlichen Bestimmungen (DSGVO, TMG, BDSG). In dieser Datenschutzerklärung informiere ich Sie über die wichtigsten Aspekte der Datenverarbeitung im Rahmen meiner Web App 'InsightFundamental'.", unsafe_allow_html=True)
+    
+    st.markdown("## 3. Erhebung und Verarbeitung personenbezogener Daten", unsafe_allow_html=True)
+    st.markdown("Ich verarbeite folgende personenbezogene Daten:", unsafe_allow_html=True)
+    st.markdown("""
+    - E-Mail-Adresse
+    - Passwort (verschlüsselt gespeichert)
+    - Zahlungsdaten (via Stripe)
+    """, unsafe_allow_html=True)
+    st.markdown("Zweck: Vertragserfüllung gemäß Art. 6 Abs. 1 lit. b DSGVO.", unsafe_allow_html=True)
+    
+    st.markdown("## 4. Zahlungsabwicklung via Stripe", unsafe_allow_html=True)
+    st.markdown("Zur Zahlungsabwicklung nutze ich Stripe. Die Datenschutzerklärung von Stripe:  \n[https://stripe.com/de/privacy](https://stripe.com/de/privacy)", unsafe_allow_html=True)
+    
+    st.markdown("## 5. Hosting", unsafe_allow_html=True)
+    st.markdown("Gehostet wird über Streamlit Community Cloud (Snowflake Inc.).", unsafe_allow_html=True)
+    
+    st.markdown("## 6. OpenAI API & Finnhub.io", unsafe_allow_html=True)
+    st.markdown("Externe APIs für Analyse und Nachrichtenbereitstellung. Es werden keine personenbezogenen Daten an diese Dienste übertragen.", unsafe_allow_html=True)
+    
+    st.markdown("## 7. Speicherdauer", unsafe_allow_html=True)
+    st.markdown("Nur solange erforderlich bzw. gesetzlich vorgeschrieben.", unsafe_allow_html=True)
+    
+    st.markdown("## 8. Betroffenenrechte", unsafe_allow_html=True)
+    st.markdown("Recht auf Auskunft, Berichtigung, Löschung, Einschränkung, Datenübertragbarkeit und Widerspruch.", unsafe_allow_html=True)
+    
+    st.markdown("## 9. Widerruf", unsafe_allow_html=True)
+    st.markdown("Einwilligungen können jederzeit widerrufen werden.", unsafe_allow_html=True)
+    
+    st.markdown("## 10. Beschwerderecht", unsafe_allow_html=True)
+    st.markdown("Bei der zuständigen Datenschutzaufsichtsbehörde.", unsafe_allow_html=True)
+    
+    st.markdown("## 11. Sicherheit", unsafe_allow_html=True)
+    st.markdown("HTTPS, verschlüsselte Passwörter, Zugriffskontrolle.", unsafe_allow_html=True)
+    
+    st.markdown("## 12. Änderungen", unsafe_allow_html=True)
+    st.markdown("Diese Datenschutzerklärung kann bei rechtlichen oder technischen Änderungen angepasst werden.", unsafe_allow_html=True)
+    
+    # Footer for legal pages
+    st.markdown("""
+    <style>
+    /* Footer Styling */
+    .website-footer {
+        background: #0b2545;
+        color: #fff;
+        padding: 2rem 1rem;
+        margin-top: 4rem;
+        border-top: 3px solid #1b325c;
+    }
+
+    .footer-content {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.5rem;
+    }
+
+    .footer-links {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 2rem;
+        align-items: center;
+    }
+
+    .footer-links a {
+        color: #fff;
+        text-decoration: none;
+        font-weight: 500;
+        font-size: 0.95em;
+        transition: all 0.3s ease;
+        padding: 0.5rem 0;
+    }
+
+    .footer-links a:hover {
+        color: #4a9eff;
+        transform: translateY(-2px);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .footer-links {
+            flex-direction: column;
+            gap: 1rem;
+            text-align: center;
+        }
+        
+        .footer-content {
+            gap: 1rem;
+        }
+        
+        .website-footer {
+            padding: 1.5rem 1rem;
+            margin-top: 2rem;
+        }
+    }
+    </style>
+
+    <footer class="website-footer">
+        <div class="footer-content">
+            <div class="footer-links">
+                <a href="/?view=impressum">Impressum</a>
+                <a href="/?view=datenschutz">Datenschutzerklärung</a>
+                <a href="/?view=agb">AGB</a>
+                <a href="/?view=nutzungsbedingungen">Nutzungsbedingungen</a>
+                <a href="/?view=cookie-hinweis">Cookie-Hinweis</a>
+            </div>
+        </div>
+    </footer>
+    """, unsafe_allow_html=True)
+    
+    st.stop()
+
+# AGB Page
+if view == "agb":
+    st.markdown("""
+    <style>
+    .stApp, .block-container, section[data-testid="stAppViewContainer"] > div:first-child {
+        background: #fff !important;
+    }
+    .header-nav {
+        background: #fff !important;
+        color: #0b2545 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+    }
+    .header-nav h1, .header-nav a, .header-nav a.button {
+        color: #0b2545 !important;
+        background: none !important;
+    }
+    .header-nav a.button {
+        background: #0b2545 !important;
+        color: #fff !important;
+        border-radius: 25px !important;
+        font-weight: 700;
+        box-shadow: 0 4px 15px rgba(11,37,69,0.3) !important;
+        border: none !important;
+        padding: 1rem 2rem !important;
+    }
+    .header-nav a.button:hover {
+        background: #1b325c !important;
+        color: #fff !important;
+        box-shadow: 0 6px 20px rgba(11,37,69,0.4) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Use native Streamlit components for better text rendering
+    st.markdown("# Allgemeine Geschäftsbedingungen (AGB)", unsafe_allow_html=True)
+    
+    st.markdown("## 1. Geltungsbereich", unsafe_allow_html=True)
+    st.markdown("Diese AGB gelten für alle Verträge zwischen Marvin Schlein (InsightFundamental) und den Nutzern der Web App 'InsightFundamental'.", unsafe_allow_html=True)
+    
+    st.markdown("## 2. Leistungen", unsafe_allow_html=True)
+    st.markdown("Bereitstellung einer SaaS-Plattform zur Analyse von Wirtschaftsnachrichten.", unsafe_allow_html=True)
+    
+    st.markdown("## 3. Registrierung und Vertragsschluss", unsafe_allow_html=True)
+    st.markdown("Erfordert Registrierung und Zustimmung zu diesen AGB. Vertrag kommt mit Abschluss der Registrierung zustande.", unsafe_allow_html=True)
+    
+    st.markdown("## 4. Preise und Zahlungsabwicklung", unsafe_allow_html=True)
+    st.markdown("19,99 €/Monat. Abwicklung über Stripe. Es gelten deren Bedingungen.", unsafe_allow_html=True)
+    
+    st.markdown("## 5. Testphase", unsafe_allow_html=True)
+    st.markdown("14 Tage kostenlos. Danach automatische Umstellung auf kostenpflichtig, sofern nicht gekündigt.", unsafe_allow_html=True)
+    
+    st.markdown("## 6. Kündigung", unsafe_allow_html=True)
+    st.markdown("Jederzeit zum Laufzeitende kündbar. Keine Rückerstattung.", unsafe_allow_html=True)
+    
+    st.markdown("## 7. Verfügbarkeit", unsafe_allow_html=True)
+    st.markdown("Keine Garantie für permanente Verfügbarkeit. Wartungsarbeiten oder Störungen möglich.", unsafe_allow_html=True)
+    
+    st.markdown("## 8. Nutzungsrechte", unsafe_allow_html=True)
+    st.markdown("Einfaches, nicht übertragbares Nutzungsrecht. Keine Weitergabe der Inhalte erlaubt.", unsafe_allow_html=True)
+    
+    st.markdown("## 9. Haftung", unsafe_allow_html=True)
+    st.markdown("Haftung nur für Vorsatz und grobe Fahrlässigkeit.", unsafe_allow_html=True)
+    
+    st.markdown("## 10. Änderungen", unsafe_allow_html=True)
+    st.markdown("Änderungen der AGB sind möglich. Nutzer werden informiert.", unsafe_allow_html=True)
+    
+    st.markdown("## 11. Schlussbestimmungen", unsafe_allow_html=True)
+    st.markdown("Es gilt deutsches Recht. Gerichtsstand ist der Sitz des Anbieters.", unsafe_allow_html=True)
+    
+    # Footer for legal pages
+    st.markdown("""
+    <style>
+    /* Footer Styling */
+    .website-footer {
+        background: #0b2545;
+        color: #fff;
+        padding: 2rem 1rem;
+        margin-top: 4rem;
+        border-top: 3px solid #1b325c;
+    }
+
+    .footer-content {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.5rem;
+    }
+
+    .footer-links {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 2rem;
+        align-items: center;
+    }
+
+    .footer-links a {
+        color: #fff;
+        text-decoration: none;
+        font-weight: 500;
+        font-size: 0.95em;
+        transition: all 0.3s ease;
+        padding: 0.5rem 0;
+    }
+
+    .footer-links a:hover {
+        color: #4a9eff;
+        transform: translateY(-2px);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .footer-links {
+            flex-direction: column;
+            gap: 1rem;
+            text-align: center;
+        }
+        
+        .footer-content {
+            gap: 1rem;
+        }
+        
+        .website-footer {
+            padding: 1.5rem 1rem;
+            margin-top: 2rem;
+        }
+    }
+    </style>
+
+    <footer class="website-footer">
+        <div class="footer-content">
+            <div class="footer-links">
+                <a href="/?view=impressum">Impressum</a>
+                <a href="/?view=datenschutz">Datenschutzerklärung</a>
+                <a href="/?view=agb">AGB</a>
+                <a href="/?view=nutzungsbedingungen">Nutzungsbedingungen</a>
+                <a href="/?view=cookie-hinweis">Cookie-Hinweis</a>
+            </div>
+        </div>
+    </footer>
+    """, unsafe_allow_html=True)
+    
+    st.stop()
+
+# Nutzungsbedingungen Page
+if view == "nutzungsbedingungen":
+    st.markdown("""
+    <style>
+    .stApp, .block-container, section[data-testid="stAppViewContainer"] > div:first-child {
+        background: #fff !important;
+    }
+    .header-nav {
+        background: #fff !important;
+        color: #0b2545 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+    }
+    .header-nav h1, .header-nav a, .header-nav a.button {
+        color: #0b2545 !important;
+        background: none !important;
+    }
+    .header-nav a.button {
+        background: #0b2545 !important;
+        color: #fff !important;
+        border-radius: 25px !important;
+        font-weight: 700;
+        box-shadow: 0 4px 15px rgba(11,37,69,0.3) !important;
+        border: none !important;
+        padding: 1rem 2rem !important;
+    }
+    .header-nav a.button:hover {
+        background: #1b325c !important;
+        color: #fff !important;
+        box-shadow: 0 6px 20px rgba(11,37,69,0.4) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Use native Streamlit components for better text rendering
+    st.markdown("# Nutzungsbedingungen", unsafe_allow_html=True)
+    
+    st.markdown("## 1. Registrierung", unsafe_allow_html=True)
+    st.markdown("Erfordert Erstellung eines Kontos mit wahrheitsgemäßen Angaben.", unsafe_allow_html=True)
+    
+    st.markdown("## 2. Zugangsdaten", unsafe_allow_html=True)
+    st.markdown("Vertraulich behandeln. Keine Haftung bei Missbrauch durch Dritte.", unsafe_allow_html=True)
+    
+    st.markdown("## 3. Nutzung der Inhalte", unsafe_allow_html=True)
+    st.markdown("Nur für persönliche, nicht-kommerzielle Nutzung erlaubt.", unsafe_allow_html=True)
+    
+    st.markdown("## 4. Verfügbarkeit", unsafe_allow_html=True)
+    st.markdown("Keine Garantie auf ständige Verfügbarkeit.", unsafe_allow_html=True)
+    
+    st.markdown("## 5. Änderungen", unsafe_allow_html=True)
+    st.markdown("Funktionen können angepasst werden, wenn zumutbar.", unsafe_allow_html=True)
+    
+    st.markdown("## 6. Ausschluss von Nutzern", unsafe_allow_html=True)
+    st.markdown("Bei Verstößen kann Zugang gesperrt werden.", unsafe_allow_html=True)
+    
+    st.markdown("## 7. Haftung", unsafe_allow_html=True)
+    st.markdown("Keine Finanzberatung. Keine Haftung für Entscheidungen auf Basis der Inhalte.", unsafe_allow_html=True)
+    
+    st.markdown("## 8. Gerichtsstand", unsafe_allow_html=True)
+    st.markdown("Es gilt deutsches Recht. Gerichtsstand ist der Sitz des Anbieters.", unsafe_allow_html=True)
+    
+    # Footer for legal pages
+    st.markdown("""
+    <style>
+    /* Footer Styling */
+    .website-footer {
+        background: #0b2545;
+        color: #fff;
+        padding: 2rem 1rem;
+        margin-top: 4rem;
+        border-top: 3px solid #1b325c;
+    }
+
+    .footer-content {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.5rem;
+    }
+
+    .footer-links {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 2rem;
+        align-items: center;
+    }
+
+    .footer-links a {
+        color: #fff;
+        text-decoration: none;
+        font-weight: 500;
+        font-size: 0.95em;
+        transition: all 0.3s ease;
+        padding: 0.5rem 0;
+    }
+
+    .footer-links a:hover {
+        color: #4a9eff;
+        transform: translateY(-2px);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .footer-links {
+            flex-direction: column;
+            gap: 1rem;
+            text-align: center;
+        }
+        
+        .footer-content {
+            gap: 1rem;
+        }
+        
+        .website-footer {
+            padding: 1.5rem 1rem;
+            margin-top: 2rem;
+        }
+    }
+    </style>
+
+    <footer class="website-footer">
+        <div class="footer-content">
+            <div class="footer-links">
+                <a href="/?view=impressum">Impressum</a>
+                <a href="/?view=datenschutz">Datenschutzerklärung</a>
+                <a href="/?view=agb">AGB</a>
+                <a href="/?view=nutzungsbedingungen">Nutzungsbedingungen</a>
+                <a href="/?view=cookie-hinweis">Cookie-Hinweis</a>
+            </div>
+        </div>
+    </footer>
+    """, unsafe_allow_html=True)
+    
+    st.stop()
+
+# Cookie-Hinweis Page
+if view == "cookie-hinweis":
+    st.markdown("""
+    <style>
+    .stApp, .block-container, section[data-testid="stAppViewContainer"] > div:first-child {
+        background: #fff !important;
+    }
+    .header-nav {
+        background: #fff !important;
+        color: #0b2545 !important;
+        box-shadow: none !important;
+        border-radius: 0 !important;
+    }
+    .header-nav h1, .header-nav a, .header-nav a.button {
+        color: #0b2545 !important;
+        background: none !important;
+    }
+    .header-nav a.button {
+        background: #0b2545 !important;
+        color: #fff !important;
+        border-radius: 25px !important;
+        font-weight: 700;
+        box-shadow: 0 4px 15px rgba(11,37,69,0.3) !important;
+        border: none !important;
+        padding: 1rem 2rem !important;
+    }
+    .header-nav a.button:hover {
+        background: #1b325c !important;
+        color: #fff !important;
+        box-shadow: 0 6px 20px rgba(11,37,69,0.4) !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # Use native Streamlit components for better text rendering
+    st.markdown("# Cookie-Hinweis", unsafe_allow_html=True)
+    
+    st.markdown("Unsere Website verwendet derzeit **keine Cookies**, insbesondere keine Tracking- oder Analyse-Cookies.", unsafe_allow_html=True)
+    
+    st.markdown("Es werden keine Cookies auf Ihrem Gerät gespeichert oder ausgelesen, die eine Einwilligung nach § 25 Abs. 1 TTDSG erfordern würden.", unsafe_allow_html=True)
+    
+    st.markdown("Sollten sich künftig Änderungen ergeben (z. B. Einsatz von Analysetools), werden wir Sie rechtzeitig informieren und gegebenenfalls Ihre Zustimmung einholen.", unsafe_allow_html=True)
+    
+    # Footer for legal pages
+    st.markdown("""
+    <style>
+    /* Footer Styling */
+    .website-footer {
+        background: #0b2545;
+        color: #fff;
+        padding: 2rem 1rem;
+        margin-top: 4rem;
+        border-top: 3px solid #1b325c;
+    }
+
+    .footer-content {
+        max-width: 1200px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 1.5rem;
+    }
+
+    .footer-links {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 2rem;
+        align-items: center;
+    }
+
+    .footer-links a {
+        color: #fff;
+        text-decoration: none;
+        font-weight: 500;
+        font-size: 0.95em;
+        transition: all 0.3s ease;
+        padding: 0.5rem 0;
+    }
+
+    .footer-links a:hover {
+        color: #4a9eff;
+        transform: translateY(-2px);
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+        .footer-links {
+            flex-direction: column;
+            gap: 1rem;
+            text-align: center;
+        }
+        
+        .footer-content {
+            gap: 1rem;
+        }
+        
+        .website-footer {
+            padding: 1.5rem 1rem;
+            margin-top: 2rem;
+        }
+    }
+    </style>
+
+    <footer class="website-footer">
+        <div class="footer-content">
+            <div class="footer-links">
+                <a href="/?view=impressum">Impressum</a>
+                <a href="/?view=datenschutz">Datenschutzerklärung</a>
+                <a href="/?view=agb">AGB</a>
+                <a href="/?view=nutzungsbedingungen">Nutzungsbedingungen</a>
+                <a href="/?view=cookie-hinweis">Cookie-Hinweis</a>
+            </div>
+        </div>
+    </footer>
+    """, unsafe_allow_html=True)
+    
     st.stop()
 
 # === Passwort zurücksetzen ===
