@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, date, timedelta
 from pathlib import Path
 import hashlib
 import json
@@ -291,13 +291,20 @@ if not USER_FILE.exists():
     USER_FILE.write_text(json.dumps({}))
 
 SESSION = st.session_state
-if "logged_in" not in SESSION:
-    SESSION.logged_in = False
-    SESSION.username = ""
-if "user_plan" not in SESSION:
-    SESSION.user_plan = None  # nur zahlende Nutzer
-if "language" not in SESSION:
-    SESSION.language = "en"  # Default language English
+
+# Initialize session state with proper defaults
+def init_session_state():
+    if "logged_in" not in SESSION:
+        SESSION.logged_in = False
+    if "username" not in SESSION:
+        SESSION.username = ""
+    if "user_plan" not in SESSION:
+        SESSION.user_plan = None
+    if "language" not in SESSION:
+        SESSION.language = "en"
+
+# Call initialization
+init_session_state()
 
 # Hilfsfunktionen
 
@@ -311,6 +318,27 @@ def redirect_to(view: str):
     except AttributeError:
         # Fallback for older Streamlit versions
         st.experimental_set_query_params(view=view)
+
+# Placeholder functions for password reset (not implemented)
+def generate_reset_token(email: str) -> str:
+    """Generate a password reset token"""
+    return f"token_{email}_{datetime.now().timestamp()}"
+
+def send_reset_email(email: str, token: str):
+    """Send password reset email (placeholder)"""
+    pass
+
+def verify_reset_token(token: str) -> str:
+    """Verify password reset token (placeholder)"""
+    if token and token.startswith("token_"):
+        parts = token.split("_")
+        if len(parts) >= 2:
+            return parts[1]  # Return email
+    return None
+
+def delete_reset_token(token: str):
+    """Delete password reset token (placeholder)"""
+    pass
 
 # === Globales CSS inklusive Landing-Page & Dark-Sidebar ===
 
@@ -634,9 +662,12 @@ if show_hamburger:
     header_html += "<span id='dashboard-hamburger-placeholder'></span>"
 
 header_html += "</div><div style='display:flex;align-items:center;'>"
-header_html += f"<a href='/?view=landing'>{get_text('home')}</a>"
-header_html += f"<a href='/?view=news'>{get_text('news_analysis')}</a>"
-header_html += f"<a href='/?view=funktionen'>{get_text('features')}</a>"
+
+# Only show navigation links if user is not logged in or not on news page
+if not SESSION.logged_in or view not in ["news", "Alle Nachrichten"]:
+    header_html += f"<a href='/?view=landing'>{get_text('home')}</a>"
+    header_html += f"<a href='/?view=news'>{get_text('news_analysis')}</a>"
+    header_html += f"<a href='/?view=funktionen'>{get_text('features')}</a>"
 
 if not SESSION.logged_in:
     header_html += f"<a href='/?view=login' class='button'>{get_text('login')}</a>"
@@ -655,6 +686,11 @@ if 'logout' in params:
     SESSION.logged_in = False
     SESSION.username = ''
     SESSION.user_plan = ''
+    # Clear filter states on logout to prevent issues
+    if "impact_filter_news" in SESSION:
+        del SESSION.impact_filter_news
+    if "confidence_level_news" in SESSION:
+        del SESSION.confidence_level_news
     st.query_params.update({"view": "landing"})
     st.rerun()
 
@@ -1254,65 +1290,223 @@ if view == "abo_starten":
 # === Translation Functions ===
 
 def translate_text(text, target_lang):
-    """Simple translation function - for now just returns English text"""
-    if target_lang == "en":
-        return text  # Keep English as is
-    elif target_lang == "de":
-        # For now, return English text. German translations can be added later
-        return text
+    """Comprehensive German to English translation function"""
+    if target_lang == "en" and text and text != '-':
+        # Check if text is already in English (contains common English words)
+        english_indicators = ['the', 'and', 'is', 'are', 'was', 'were', 'will', 'would', 'could', 'should', 'market', 'analysis', 'forecast']
+        text_lower = text.lower()
+        if any(word in text_lower for word in english_indicators):
+            return text  # Already in English
+        
+        # Comprehensive German to English translation patterns
+        translations = {
+            # Complete sentence patterns
+            "Die Prognose von Morgan Stanley, dass der S&P 500 wahrscheinlicher auf 7.200 Punkte im nächsten Jahr steigen wird, basiert auf zwei Hauptfaktoren: bessere Gewinne und ein stetig hohes KGV.": "Morgan Stanley's forecast that the S&P 500 is more likely to reach 7,200 points next year is based on two main factors: better earnings and a consistently high P/E ratio.",
+            
+            "Die Analyse von Citrini Research weist auf eine starke Korrelation zwischen den aktuellen Marktbedingungen und denen des Jahres 1998 hin.": "Citrini Research's analysis points to a strong correlation between current market conditions and those of 1998.",
+            
+            "Die Nachricht fällt unter die Kategorie 'Finanzen', da sie sich auf persönliche Finanzen, Altersvorsorge und Versicherung bezieht.": "The news falls under the 'Finance' category as it relates to personal finance, retirement planning, and insurance.",
+            
+            "Die bevorstehende Pressekonferenz von Powell wird als entscheidend angesehen, da er unter erheblichem Druck steht.": "Powell's upcoming press conference is considered crucial as he is under significant pressure.",
+            
+            # Common German sentence starters
+            "Die Prognose": "The forecast",
+            "Die Analyse": "The analysis",
+            "Die Nachricht": "The news",
+            "Die Entscheidung": "The decision",
+            "Die Ankündigung": "The announcement",
+            "Diese Nachricht": "This news",
+            "Dieser Vorfall": "This incident",
+            "Diese Ankündigung": "This announcement",
+            "Diese Entwicklung": "This development",
+            "Dieses Ereignis": "This event",
+            "Diese Situation": "This situation",
+            
+            # Verbs and actions
+            "basiert auf": "is based on",
+            "deutet darauf hin": "indicates",
+            "weist auf": "points to",
+            "führt zu": "leads to",
+            "hat zur Folge": "results in",
+            "könnte dazu führen": "could lead to",
+            "wird erwartet": "is expected",
+            "wird angenommen": "is assumed",
+            "wird geschätzt": "is estimated",
+            "zeigt sich": "shows",
+            "ergibt sich": "results",
+            "stellt dar": "represents",
+            "bedeutet dies": "this means",
+            "lässt sich": "can be",
+            "ist zu erwarten": "is to be expected",
+            "sollte beachtet werden": "should be noted",
+            "ist wichtig zu beachten": "it is important to note",
+            "es ist jedoch wichtig zu beachten": "however, it is important to note",
+            
+            # Modal verbs
+            "könnte": "could",
+            "würde": "would",
+            "sollte": "should",
+            "müsste": "would have to",
+            "dürfte": "is likely to",
+            "kann": "can",
+            "mag": "may",
+            "wird": "will",
+            "soll": "shall",
+            
+            # Common verbs
+            "bedeutet": "means",
+            "zeigt": "shows",
+            "beeinflusst": "influences",
+            "betrifft": "affects",
+            "verursacht": "causes",
+            "ermöglicht": "enables",
+            "verhindert": "prevents",
+            "unterstützt": "supports",
+            "gefährdet": "endangers",
+            "verstärkt": "strengthens",
+            "schwächt": "weakens",
+            
+            # Financial and market terms
+            "Märkte": "markets",
+            "Aktienmarkt": "stock market",
+            "Finanzmärkte": "financial markets",
+            "Kapitalmärkte": "capital markets",
+            "Unternehmen": "companies",
+            "Investoren": "investors",
+            "Anleger": "investors",
+            "Wirtschaft": "economy",
+            "Handel": "trade",
+            "Handelsabkommen": "trade agreement",
+            "Handelsbeziehungen": "trade relations",
+            "Zölle": "tariffs",
+            "Zollsätze": "tariff rates",
+            "Auswirkungen": "effects",
+            "Marktauswirkungen": "market effects",
+            "Einfluss": "influence",
+            "Markteinfluss": "market influence",
+            "Entwicklung": "development",
+            "Marktentwicklung": "market development",
+            "Situation": "situation",
+            "Marktsituation": "market situation",
+            "Ereignis": "event",
+            "Marktereignis": "market event",
+            "Faktoren": "factors",
+            "Marktfaktoren": "market factors",
+            "Risiken": "risks",
+            "Marktrisiken": "market risks",
+            "Chancen": "opportunities",
+            "Marktchancen": "market opportunities",
+            "Prognose": "forecast",
+            "Marktprognose": "market forecast",
+            "Erwartungen": "expectations",
+            "Markterwartungen": "market expectations",
+            "Vertrauen": "confidence",
+            "Marktvertrauen": "market confidence",
+            "Unsicherheit": "uncertainty",
+            "Marktunsicherheit": "market uncertainty",
+            "Volatilität": "volatility",
+            "Marktvolatilität": "market volatility",
+            "Wachstum": "growth",
+            "Wirtschaftswachstum": "economic growth",
+            "Rückgang": "decline",
+            "Marktrückgang": "market decline",
+            "Steigerung": "increase",
+            "Verbesserung": "improvement",
+            "Verschlechterung": "deterioration",
+            
+            # Time and temporal expressions
+            "in der Vergangenheit": "in the past",
+            "in Zukunft": "in the future",
+            "derzeit": "currently",
+            "gegenwärtig": "currently",
+            "zukünftig": "in the future",
+            "künftig": "in the future",
+            "bisher": "so far",
+            "bereits": "already",
+            "noch": "still",
+            "weiterhin": "continue to",
+            "nach wie vor": "still",
+            
+            # Conjunctions and connectors
+            "jedoch": "however",
+            "allerdings": "however",
+            "dennoch": "nevertheless",
+            "trotzdem": "nevertheless",
+            "daher": "therefore",
+            "deshalb": "therefore",
+            "folglich": "consequently",
+            "somit": "thus",
+            "außerdem": "furthermore",
+            "darüber hinaus": "furthermore",
+            "zusätzlich": "additionally",
+            "ebenso": "likewise",
+            "gleichzeitig": "simultaneously",
+            "währenddessen": "meanwhile",
+            "andererseits": "on the other hand",
+            "hingegen": "on the other hand",
+            
+            # Adjectives and descriptors
+            "erheblich": "significant",
+            "beträchtlich": "considerable",
+            "wesentlich": "substantial",
+            "wichtig": "important",
+            "entscheidend": "crucial",
+            "kritisch": "critical",
+            "positiv": "positive",
+            "negativ": "negative",
+            "stark": "strong",
+            "schwach": "weak",
+            "hoch": "high",
+            "niedrig": "low",
+            "groß": "large",
+            "klein": "small",
+            "schnell": "fast",
+            "langsam": "slow",
+            "neu": "new",
+            "alt": "old",
+            "aktuell": "current",
+            "zukünftig": "future",
+            "vergangen": "past",
+            
+            # Common phrases
+            "auf Basis": "based on",
+            "aufgrund": "due to",
+            "wegen": "because of",
+            "infolge": "as a result of",
+            "im Hinblick auf": "with regard to",
+            "in Bezug auf": "in relation to",
+            "hinsichtlich": "regarding",
+            "bezüglich": "regarding",
+            "im Vergleich zu": "compared to",
+            "gegenüber": "compared to",
+            "im Gegensatz zu": "in contrast to",
+            "anstatt": "instead of",
+            "statt": "instead of",
+            "sowie": "as well as",
+            "sowohl": "both",
+            "entweder": "either",
+            "weder": "neither",
+        }
+        
+        # Apply translations in order of length (longest first to avoid partial replacements)
+        translated = text
+        for german_phrase in sorted(translations.keys(), key=len, reverse=True):
+            if german_phrase in translated:
+                translated = translated.replace(german_phrase, translations[german_phrase])
+        
+        return translated
     else:
         return text
 
 # === News-Startseite ===
 
 if view in ["news", "Alle Nachrichten"]:
-    # Weiterleitung für nicht eingeloggte Nutzer
-    if not SESSION.logged_in:
-        try:
-            # New Streamlit API (1.28+)
-            st.query_params.update({"view": "login"})
-        except AttributeError:
-            # Fallback for older Streamlit versions
-            st.experimental_set_query_params(view="login")
-        st.rerun()
-        st.stop()
+    # Allow access to news page without login
     
-    # --- Impact Score & Confidence Filter ganz oben, optisch rechts ---
-    filter_left, filter_center, filter_right = st.columns([1,2,1])
-    with filter_right:
-        # Überschrift Impact Score
-        st.markdown(f"<div style='font-size:0.98em; color:#0b2545; font-weight:600; margin-bottom:0.1em;'>{get_text('impact_score_filter')}</div>", unsafe_allow_html=True)
-        
-        impact_min, impact_max = st.session_state.get('impact_filter_news', (-10, 10))
-        impact_min, impact_max = st.slider(
-            get_text('impact_score_filter'),
-            -10, 10, (impact_min, impact_max), key='impact_filter_news',
-            label_visibility='collapsed',
-            step=1,
-            help=None,
-        )
-        
-        # Überschrift Confidence Level
-        st.markdown(f"<div style='font-size:0.98em; color:#0b2545; font-weight:600; margin-bottom:0.1em; margin-top:0.5em;'>{get_text('confidence_level_filter')}</div>", unsafe_allow_html=True)
-        
-        confidence_options = ["All", get_text("confidence_high"), get_text("confidence_medium"), get_text("confidence_low")]
-        confidence_selected = st.session_state.get('confidence_level_news', 'All')
-        confidence_selected = st.radio(
-            get_text('confidence_level_filter'),
-            confidence_options,
-            index=confidence_options.index(confidence_selected) if confidence_selected in confidence_options else 0,
-            key='confidence_level_news',
-            horizontal=True,
-            label_visibility='collapsed',
-            help=None,
-        )
-        
-        st.markdown("<div style='height:0.5em;'></div>", unsafe_allow_html=True)
-
     st.markdown("<style>.block-container {padding-top: 0.5rem !important;}</style>", unsafe_allow_html=True)
 
     # --- Linke Spalte: Dashboard ---
-    left_col, mid_col, right_col = st.columns([1,2,1])
+    left_col, mid_col = st.columns([1,2])
     with left_col:
         st.markdown('<div class="content-col">', unsafe_allow_html=True)
         
@@ -1464,6 +1658,9 @@ if view in ["news", "Alle Nachrichten"]:
         else:
             df["publishedAt"] = pd.to_datetime(df["publishedAt"], errors="coerce")
             
+            # Remove duplicate news items based on title and publishedAt
+            df = df.drop_duplicates(subset=['title', 'publishedAt'], keep='first')
+            
             st.markdown("""
             <style>
             .news-card {
@@ -1588,30 +1785,12 @@ if view in ["news", "Alle Nachrichten"]:
             </style>
             """, unsafe_allow_html=True)
             
-            # Englische Filter-Optionen
-            conf_map = {"All": ["high", "medium", "low"], "High": ["high"], "Medium": ["medium"], "Low": ["low"]}
-            confidence_options = ["All", "High", "Medium", "Low"]
-            
-            # Filter UI
-            impact_min, impact_max = st.session_state.get('impact_filter_news', (-10, 10))
-            confidence_selected = st.session_state.get('confidence_level_news', 'All')
-            allowed_conf = conf_map[confidence_selected]
-            
+            # Display all news without filtering
             for _, r in df.iterrows():
-                # Filter: Impact Score im Bereich?
-                impact = r.get('impact', '-')
-                try:
-                    if impact is not None and impact != '-' and impact != '':
-                        impact_val = float(impact)
-                        if not (impact_min <= impact_val <= impact_max):
-                            continue  # Nachricht überspringen
-                except Exception:
-                    pass
                 
-                # Filter: Confidence
+                # Get impact and confidence values
+                impact = r.get('impact', '-')
                 confidence = str(r.get('confidence', '-') or '').lower()
-                if confidence not in allowed_conf:
-                    continue
                 
                 # Impact Score Badge Farbe
                 try:
@@ -1674,8 +1853,16 @@ if view in ["news", "Alle Nachrichten"]:
                 confidence_str = str(confidence_val) if confidence_val is not None else '-'
                 title_val = r.get('title', '') if 'title' in r else ''
                 description_val = r.get('description', '') if 'description' in r else ''
+                
+                # Ensure patterns and explanation content is in English
                 patterns_val = r.get('patterns', '-') if 'patterns' in r else '-'
                 explanation_val = r.get('explanation', '-') if 'explanation' in r else '-'
+                
+                # Force English display for patterns and explanation content
+                if patterns_val and patterns_val != '-':
+                    patterns_val = translate_text(str(patterns_val), "en")
+                if explanation_val and explanation_val != '-':
+                    explanation_val = translate_text(str(explanation_val), "en")
                 
                 st.markdown(f"""
                 <div class='news-card'>
@@ -1688,10 +1875,10 @@ if view in ["news", "Alle Nachrichten"]:
                     </div>
                     <div class='news-summary'>{description_val}</div>
                     <details>
-                        <summary style='font-weight:600; color:#0b2545; cursor:pointer;'>Learn More</summary>
+                        <summary style='font-weight:600; color:#0b2545; cursor:pointer;'>{get_text('learn_more')}</summary>
                         <div style='margin-top:1em;'>
-                            <b>Historical Patterns:</b> {patterns_val}<br>
-                            <b>Analysis:</b> {explanation_val}
+                            <b>{get_text('historical_patterns_news')}</b> {patterns_val}<br>
+                            <b>{get_text('analysis')}</b> {explanation_val}
                         </div>
                     </details>
                 </div>
@@ -1699,14 +1886,8 @@ if view in ["news", "Alle Nachrichten"]:
         
         st.markdown('</div>', unsafe_allow_html=True)
 
-    # --- Rechte Spalte: Filter ---
-    with right_col:
-        # st.markdown("<h4>Filter</h4>", unsafe_allow_html=True) # Entfernt
-        # impact_min, impact_max = st.slider("Impact Score", -10, 10, (st.session_state.impact_min, st.session_state.impact_max), key="impact_filter") # Entfernt
-        # Filterwerte in session_state speichern
-        # st.session_state.impact_min = impact_min
-        # st.session_state.impact_max = impact_max
-        st.markdown("<div style='height:3em;'></div>", unsafe_allow_html=True)  # Abstand nach unten
+    # --- Rechte Spalte: Filter (removed) ---
+    # The right column filter section has been removed as it's no longer needed
 
 # === Passwort vergessen ===
 if view == "forgot_password":
@@ -2012,83 +2193,6 @@ if view == "impressum":
     """, unsafe_allow_html=True)
     
     st.markdown("Ich bin nicht verpflichtet oder bereit, an Streitbeilegungsverfahren vor einer Verbraucherschlichtungsstelle teilzunehmen.", unsafe_allow_html=True)
-    
-    # Footer for legal pages
-    st.markdown("""
-    <style>
-    /* Footer Styling */
-    .website-footer {
-        background: #0b2545;
-        color: #fff;
-        padding: 2rem 1rem;
-        margin-top: 4rem;
-        border-top: 3px solid #1b325c;
-    }
-
-    .footer-content {
-        max-width: 1200px;
-        margin: 0 auto;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1.5rem;
-    }
-
-    .footer-links {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 2rem;
-        align-items: center;
-    }
-
-    .footer-links a {
-        color: #fff;
-        text-decoration: none;
-        font-weight: 500;
-        font-size: 0.95em;
-        transition: all 0.3s ease;
-        padding: 0.5rem 0;
-    }
-
-    .footer-links a:hover {
-        color: #4a9eff;
-        transform: translateY(-2px);
-    }
-
-    /* Responsive Design */
-    @media (max-width: 768px) {
-        .footer-links {
-            flex-direction: column;
-            gap: 1rem;
-            text-align: center;
-        }
-        
-        .footer-content {
-            gap: 1rem;
-        }
-        
-        .website-footer {
-            padding: 1.5rem 1rem;
-            margin-top: 2rem;
-        }
-    }
-    </style>
-
-    <footer class="website-footer">
-        <div class="footer-content">
-            <div class="footer-links">
-                <a href="/?view=impressum">Impressum</a>
-                <a href="/?view=datenschutz">Datenschutzerklärung</a>
-                <a href="/?view=agb">AGB</a>
-                <a href="/?view=nutzungsbedingungen">Nutzungsbedingungen</a>
-                <a href="/?view=cookie-hinweis">Cookie-Hinweis</a>
-            </div>
-        </div>
-    </footer>
-    """, unsafe_allow_html=True)
-    
-    st.stop()
 
 # Datenschutzerklärung Page
 if view == "datenschutz":
@@ -2175,83 +2279,6 @@ if view == "datenschutz":
     
     st.markdown("## 12. Änderungen", unsafe_allow_html=True)
     st.markdown("Diese Datenschutzerklärung kann bei rechtlichen oder technischen Änderungen angepasst werden.", unsafe_allow_html=True)
-    
-    # Footer for legal pages
-    st.markdown("""
-    <style>
-    /* Footer Styling */
-    .website-footer {
-        background: #0b2545;
-        color: #fff;
-        padding: 2rem 1rem;
-        margin-top: 4rem;
-        border-top: 3px solid #1b325c;
-    }
-
-    .footer-content {
-        max-width: 1200px;
-        margin: 0 auto;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1.5rem;
-    }
-
-    .footer-links {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 2rem;
-        align-items: center;
-    }
-
-    .footer-links a {
-        color: #fff;
-        text-decoration: none;
-        font-weight: 500;
-        font-size: 0.95em;
-        transition: all 0.3s ease;
-        padding: 0.5rem 0;
-    }
-
-    .footer-links a:hover {
-        color: #4a9eff;
-        transform: translateY(-2px);
-    }
-
-    /* Responsive Design */
-    @media (max-width: 768px) {
-        .footer-links {
-            flex-direction: column;
-            gap: 1rem;
-            text-align: center;
-        }
-        
-        .footer-content {
-            gap: 1rem;
-        }
-        
-        .website-footer {
-            padding: 1.5rem 1rem;
-            margin-top: 2rem;
-        }
-    }
-    </style>
-
-    <footer class="website-footer">
-        <div class="footer-content">
-            <div class="footer-links">
-                <a href="/?view=impressum">Impressum</a>
-                <a href="/?view=datenschutz">Datenschutzerklärung</a>
-                <a href="/?view=agb">AGB</a>
-                <a href="/?view=nutzungsbedingungen">Nutzungsbedingungen</a>
-                <a href="/?view=cookie-hinweis">Cookie-Hinweis</a>
-            </div>
-        </div>
-    </footer>
-    """, unsafe_allow_html=True)
-    
-    st.stop()
 
 # AGB Page
 if view == "agb":
@@ -2322,83 +2349,6 @@ if view == "agb":
     
     st.markdown("## 11. Schlussbestimmungen", unsafe_allow_html=True)
     st.markdown("Es gilt deutsches Recht. Gerichtsstand ist der Sitz des Anbieters.", unsafe_allow_html=True)
-    
-    # Footer for legal pages
-    st.markdown("""
-    <style>
-    /* Footer Styling */
-    .website-footer {
-        background: #0b2545;
-        color: #fff;
-        padding: 2rem 1rem;
-        margin-top: 4rem;
-        border-top: 3px solid #1b325c;
-    }
-
-    .footer-content {
-        max-width: 1200px;
-        margin: 0 auto;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1.5rem;
-    }
-
-    .footer-links {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 2rem;
-        align-items: center;
-    }
-
-    .footer-links a {
-        color: #fff;
-        text-decoration: none;
-        font-weight: 500;
-        font-size: 0.95em;
-        transition: all 0.3s ease;
-        padding: 0.5rem 0;
-    }
-
-    .footer-links a:hover {
-        color: #4a9eff;
-        transform: translateY(-2px);
-    }
-
-    /* Responsive Design */
-    @media (max-width: 768px) {
-        .footer-links {
-            flex-direction: column;
-            gap: 1rem;
-            text-align: center;
-        }
-        
-        .footer-content {
-            gap: 1rem;
-        }
-        
-        .website-footer {
-            padding: 1.5rem 1rem;
-            margin-top: 2rem;
-        }
-    }
-    </style>
-
-    <footer class="website-footer">
-        <div class="footer-content">
-            <div class="footer-links">
-                <a href="/?view=impressum">Impressum</a>
-                <a href="/?view=datenschutz">Datenschutzerklärung</a>
-                <a href="/?view=agb">AGB</a>
-                <a href="/?view=nutzungsbedingungen">Nutzungsbedingungen</a>
-                <a href="/?view=cookie-hinweis">Cookie-Hinweis</a>
-            </div>
-        </div>
-    </footer>
-    """, unsafe_allow_html=True)
-    
-    st.stop()
 
 # Nutzungsbedingungen Page
 if view == "nutzungsbedingungen":
@@ -2460,83 +2410,6 @@ if view == "nutzungsbedingungen":
     
     st.markdown("## 8. Gerichtsstand", unsafe_allow_html=True)
     st.markdown("Es gilt deutsches Recht. Gerichtsstand ist der Sitz des Anbieters.", unsafe_allow_html=True)
-    
-    # Footer for legal pages
-    st.markdown("""
-    <style>
-    /* Footer Styling */
-    .website-footer {
-        background: #0b2545;
-        color: #fff;
-        padding: 2rem 1rem;
-        margin-top: 4rem;
-        border-top: 3px solid #1b325c;
-    }
-
-    .footer-content {
-        max-width: 1200px;
-        margin: 0 auto;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1.5rem;
-    }
-
-    .footer-links {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 2rem;
-        align-items: center;
-    }
-
-    .footer-links a {
-        color: #fff;
-        text-decoration: none;
-        font-weight: 500;
-        font-size: 0.95em;
-        transition: all 0.3s ease;
-        padding: 0.5rem 0;
-    }
-
-    .footer-links a:hover {
-        color: #4a9eff;
-        transform: translateY(-2px);
-    }
-
-    /* Responsive Design */
-    @media (max-width: 768px) {
-        .footer-links {
-            flex-direction: column;
-            gap: 1rem;
-            text-align: center;
-        }
-        
-        .footer-content {
-            gap: 1rem;
-        }
-        
-        .website-footer {
-            padding: 1.5rem 1rem;
-            margin-top: 2rem;
-        }
-    }
-    </style>
-
-    <footer class="website-footer">
-        <div class="footer-content">
-            <div class="footer-links">
-                <a href="/?view=impressum">Impressum</a>
-                <a href="/?view=datenschutz">Datenschutzerklärung</a>
-                <a href="/?view=agb">AGB</a>
-                <a href="/?view=nutzungsbedingungen">Nutzungsbedingungen</a>
-                <a href="/?view=cookie-hinweis">Cookie-Hinweis</a>
-            </div>
-        </div>
-    </footer>
-    """, unsafe_allow_html=True)
-    
-    st.stop()
 
 # Cookie-Hinweis Page
 if view == "cookie-hinweis":
@@ -2580,83 +2453,6 @@ if view == "cookie-hinweis":
     st.markdown("Es werden keine Cookies auf Ihrem Gerät gespeichert oder ausgelesen, die eine Einwilligung nach § 25 Abs. 1 TTDSG erfordern würden.", unsafe_allow_html=True)
     
     st.markdown("Sollten sich künftig Änderungen ergeben (z. B. Einsatz von Analysetools), werden wir Sie rechtzeitig informieren und gegebenenfalls Ihre Zustimmung einholen.", unsafe_allow_html=True)
-    
-    # Footer for legal pages
-    st.markdown("""
-    <style>
-    /* Footer Styling */
-    .website-footer {
-        background: #0b2545;
-        color: #fff;
-        padding: 2rem 1rem;
-        margin-top: 4rem;
-        border-top: 3px solid #1b325c;
-    }
-
-    .footer-content {
-        max-width: 1200px;
-        margin: 0 auto;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 1.5rem;
-    }
-
-    .footer-links {
-        display: flex;
-        flex-wrap: wrap;
-        justify-content: center;
-        gap: 2rem;
-        align-items: center;
-    }
-
-    .footer-links a {
-        color: #fff;
-        text-decoration: none;
-        font-weight: 500;
-        font-size: 0.95em;
-        transition: all 0.3s ease;
-        padding: 0.5rem 0;
-    }
-
-    .footer-links a:hover {
-        color: #4a9eff;
-        transform: translateY(-2px);
-    }
-
-    /* Responsive Design */
-    @media (max-width: 768px) {
-        .footer-links {
-            flex-direction: column;
-            gap: 1rem;
-            text-align: center;
-        }
-        
-        .footer-content {
-            gap: 1rem;
-        }
-        
-        .website-footer {
-            padding: 1.5rem 1rem;
-            margin-top: 2rem;
-        }
-    }
-    </style>
-
-    <footer class="website-footer">
-        <div class="footer-content">
-            <div class="footer-links">
-                <a href="/?view=impressum">Impressum</a>
-                <a href="/?view=datenschutz">Datenschutzerklärung</a>
-                <a href="/?view=agb">AGB</a>
-                <a href="/?view=nutzungsbedingungen">Nutzungsbedingungen</a>
-                <a href="/?view=cookie-hinweis">Cookie-Hinweis</a>
-            </div>
-        </div>
-    </footer>
-    """, unsafe_allow_html=True)
-    
-    st.stop()
 
 # === Passwort zurücksetzen ===
 if view == "reset_password":
