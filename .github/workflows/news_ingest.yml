@@ -32,7 +32,7 @@ jobs:
 
       - name: Run news_ingest.py
         env:
-          NEWSAPI_KEY: ${{ secrets.NEWSAPI_KEY }}
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
         run: python backend/news_ingest.py
 
       - name: Commit & push updated CSV
