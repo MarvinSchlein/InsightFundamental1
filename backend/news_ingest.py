@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 import requests
 from dotenv import load_dotenv
+from news_processor import analyze_news
 
 # Load environment variables
 load_dotenv()
@@ -92,17 +93,40 @@ def append_to_csv(articles: list, path: Path):
 
 # === 4) Hauptfunktion ===
 def main():
-    now          = datetime.now(timezone.utc)
+    now = datetime.now(timezone.utc)
     one_hour_ago = now - timedelta(hours=1)
     print(f"[{now.isoformat()}] Fetching articles from "
           f"{one_hour_ago.isoformat()} to {now.isoformat()}…")
 
     articles = fetch_latest_articles(API_KEY, one_hour_ago, now)
-    if articles:
-        append_to_csv(articles, OUTPUT)
-        print(f"✅ Appended {len(articles)} new articles to {OUTPUT}")
+
+    analyzed_articles = []
+
+    for article in articles:
+        title = article.get("headline", "")
+        description = article.get("summary", "")
+
+        try:
+            analysis = analyze_news(title, description)
+        except Exception as e:
+            print(f"❌ Analysis failed for article: {title[:30]}... Error: {e}")
+            continue
+
+        article.update({
+            "impact": analysis.get("impact", ""),
+            "confidence": analysis.get("confidence", ""),
+            "markets": analysis.get("markets", ""),
+            "patterns": analysis.get("patterns", ""),
+            "explanation": analysis.get("explanation", ""),
+        })
+
+        analyzed_articles.append(article)
+
+    if analyzed_articles:
+        append_to_csv(analyzed_articles, OUTPUT)
+        print(f"✅ Appended {len(analyzed_articles)} analyzed articles to {OUTPUT}")
     else:
-        print("ℹ️  No new articles in this interval.")
+        print("ℹ️  No articles were analyzed in this interval.")
 
 if __name__ == "__main__":
     main()
