@@ -21,14 +21,12 @@ jobs:
           python-version: '3.x'
 
       - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          # Stelle sicher, dass requests immer installiert wird
-          pip install requests
-          # Installiere zusätzliche Pakete aus requirements.txt (falls vorhanden)
-          if [ -f requirements.txt ]; then
-            pip install -r requirements.txt
-          fi
+  run: |
+    pip install --upgrade pip
+    pip install requests
+    if [ -f requirements.txt ]; then
+      pip install -r requirements.txt
+    fi
 
       - name: Run news_ingest.py
         env:
