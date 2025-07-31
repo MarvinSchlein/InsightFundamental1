@@ -866,6 +866,31 @@ if view == "landing":
             redirect_to("register")
             st.rerun()
 
+# === Platzhalter für andere Views ===
+elif view == "login":
+    st.title("Login Page")
+    st.write("Dies ist eine Platzhalter-Seite für den Login.")
+
+elif view == "register":
+    st.title("Register Page")
+    st.write("Dies ist eine Platzhalter-Seite für die Registrierung.")
+
+elif view == "news-analysis":
+    st.title("News Analysis")
+    st.write("Hier erscheinen später die analysierten Nachrichten.")
+
+elif view == "funktionen":
+    st.title("Feature Overview")
+    st.write("Hier könnten Features deiner App erklärt werden.")
+
+elif view == "reset-password":
+    st.title("Reset Password")
+    st.write("Hier kann das Passwort zurückgesetzt werden.")
+
+elif view == "cancel-subscription":
+    st.title("Cancel Subscription")
+    st.write("Hier wird das Abo gekündigt.")
+
 # === Funktionen-Seite ===
 if view == "funktionen":
     # Komplett weißer Hintergrund für sanften Übergang
