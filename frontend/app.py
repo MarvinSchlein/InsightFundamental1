@@ -1191,7 +1191,9 @@ if view == "login":
         
         email = st.text_input(get_text("email"), key="login_email")
         pwd = st.text_input(get_text("password"), type="password", key="login_pwd")
+        st.markdown('<div class="stay-checkbox">', unsafe_allow_html=True)
         keep_logged_in = st.checkbox(get_text("stay_logged_in"), key="keep_logged_in")
+        st.markdown('</div>', unsafe_allow_html=True)
         
         if st.button(get_text("login_button")):
             users = json.loads(USER_FILE.read_text())
@@ -1278,7 +1280,9 @@ if view == "register":
         email = st.text_input(get_text("email"), key="reg_email")
         pwd = st.text_input(get_text("password"), type="password", key="reg_pwd")
         pwd_confirm = st.text_input(get_text("confirm_password"), type="password", key="reg_pwd_confirm")
+        st.markdown('<div class="terms-checkbox">', unsafe_allow_html=True)
         agb = st.checkbox(get_text("accept_terms"), key="reg_agb")
+        st.markdown('</div>', unsafe_allow_html=True)
         
         if st.button(get_text("register_button")):
             if not agb:
