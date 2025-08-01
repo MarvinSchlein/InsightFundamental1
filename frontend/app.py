@@ -12,6 +12,17 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 
+# 👉 Navigations-Setup (einmalig zu Beginn der Datei):
+if "view" not in st.session_state:
+    st.session_state["view"] = "landing"
+
+def redirect_to(page_name):
+    st.experimental_set_query_params(view=page_name)
+    st.rerun()
+
+query_params = st.experimental_get_query_params()
+view = query_params.get("view", ["landing"])[0]
+
 # Lade .env Datei für lokale Entwicklung
 load_dotenv()
 
@@ -312,12 +323,7 @@ def save_users(users: dict):
     USER_FILE.write_text(json.dumps(users))
 
 def redirect_to(view: str):
-    try:
-        # New Streamlit API (1.28+)
-        st.query_params.update({"view": view})
-    except AttributeError:
-        # Fallback for older Streamlit versions
-        st.experimental_set_query_params(view=view)
+    st.experimental_set_query_params(view=view)
 
 # Placeholder functions for password reset (not implemented)
 def generate_reset_token(email: str) -> str:
@@ -691,7 +697,7 @@ if 'logout' in params:
         del SESSION.impact_filter_news
     if "confidence_level_news" in SESSION:
         del SESSION.confidence_level_news
-    st.query_params.update({"view": "landing"})
+    st.experimental_set_query_params(view="landing")
     st.rerun()
 
 # === Landing-Page ===
@@ -787,7 +793,6 @@ if view == "landing":
     with col2:
         if st.button(get_text('discover_features'), key="hero_discover_btn"):
             redirect_to("funktionen")
-            st.rerun()
     st.markdown("<br>", unsafe_allow_html=True)
 
     # Features-Bereich
@@ -864,7 +869,31 @@ if view == "landing":
     with col2:
         if st.button(get_text('start_free'), key="cta_start_free_btn"):
             redirect_to("register")
-            st.rerun()
+
+# === Platzhalter für andere Views ===
+elif view == "login":
+    st.title("Login Page")
+    st.write("Dies ist eine Platzhalter-Seite für den Login.")
+
+elif view == "register":
+    st.title("Register Page")
+    st.write("Dies ist eine Platzhalter-Seite für die Registrierung.")
+
+elif view == "news-analysis":
+    st.title("News Analysis")
+    st.write("Hier erscheinen später die analysierten Nachrichten.")
+
+elif view == "funktionen":
+    st.title("Feature Overview")
+    st.write("Hier könnten Features deiner App erklärt werden.")
+
+elif view == "reset-password":
+    st.title("Reset Password")
+    st.write("Hier kann das Passwort zurückgesetzt werden.")
+
+elif view == "cancel-subscription":
+    st.title("Cancel Subscription")
+    st.write("Hier wird das Abo gekündigt.")
 
 # === Funktionen-Seite ===
 if view == "funktionen":
@@ -1174,25 +1203,17 @@ if view == "login":
                 SESSION.username = email
                 SESSION.user_plan = "paid"
                 redirect_to("news")
-                st.rerun()  # Sofortiges Neuladen nach Login
             elif user_data and not isinstance(user_data, dict) and user_data == pw_hash:
                 # Simple user object with just password hash
                 SESSION.logged_in = True
                 SESSION.username = email
                 SESSION.user_plan = "paid"
                 redirect_to("news")
-                st.rerun()  # Sofortiges Neuladen nach Login
             else:
                 st.error(get_text("invalid_credentials"))
         
         if st.button(get_text("forgot_password"), key="forgot_pwd_btn"):
-            try:
-                # New Streamlit API (1.28+)
-                st.query_params.update({"view": "forgot_password"})
-            except AttributeError:
-                # Fallback for older Streamlit versions
-                st.experimental_set_query_params(view="forgot_password")
-            st.rerun()
+            redirect_to("forgot_password")
         
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -2456,7 +2477,7 @@ if view == "cookie-hinweis":
 
 # === Passwort zurücksetzen ===
 if view == "reset_password":
-    params = dict(st.query_params)
+    params = st.experimental_get_query_params()
     token = params.get("token", [None])[0]
     email = verify_reset_token(token) if token else None
     
