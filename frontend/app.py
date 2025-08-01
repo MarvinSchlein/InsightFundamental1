@@ -875,6 +875,10 @@ elif view == "register":
     st.write("Dies ist eine Platzhalter-Seite für die Registrierung.")
 
 elif view == "news-analysis":
+    if not st.session_state.get("logged_in") or not st.session_state.get("subscription_active"):
+        redirect_to("login")
+        st.rerun()
+    
     st.title("News Analysis")
     st.write("Hier erscheinen später die analysierten Nachrichten.")
 
@@ -1174,6 +1178,9 @@ if view == "login":
         width:100%;
         text-align:left;
     }
+    .login-card .stCheckbox span {
+        color: #000000 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
     
@@ -1256,6 +1263,9 @@ if view == "register":
     .register-card label, .register-card .stCheckbox {
         width:100%;
         text-align:left;
+    }
+    .register-card .stCheckbox span {
+        color: #000000 !important;
     }
     </style>
     """, unsafe_allow_html=True)
