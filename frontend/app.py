@@ -1181,6 +1181,9 @@ if view == "login":
     .login-card .stCheckbox span {
         color: #000000 !important;
     }
+    .login-checkbox .stCheckbox span {
+        color: #000000 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
     
@@ -1269,9 +1272,11 @@ if view == "register":
     .register-card .stCheckbox span {
         color: #000000 !important;
     }
+    .register-checkbox .stCheckbox span {
+        color: #000000 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
-    
     cols = st.columns([2,1,2])
     with cols[1]:
         st.markdown('<div class="register-card">', unsafe_allow_html=True)
