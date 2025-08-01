@@ -866,14 +866,6 @@ if view == "landing":
             redirect_to("register")
 
 # === Platzhalter für andere Views ===
-elif view == "login":
-    st.title("Login Page")
-    st.write("Dies ist eine Platzhalter-Seite für den Login.")
-
-elif view == "register":
-    st.title("Register Page")
-    st.write("Dies ist eine Platzhalter-Seite für die Registrierung.")
-
 elif view == "news-analysis":
     if not st.session_state.get("logged_in") or not st.session_state.get("subscription_active"):
         redirect_to("login")
@@ -881,10 +873,6 @@ elif view == "news-analysis":
     
     st.title("News Analysis")
     st.write("Hier erscheinen später die analysierten Nachrichten.")
-
-elif view == "funktionen":
-    st.title("Feature Overview")
-    st.write("Hier könnten Features deiner App erklärt werden.")
 
 elif view == "reset-password":
     st.title("Reset Password")
