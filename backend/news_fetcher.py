@@ -4,13 +4,13 @@ import pandas as pd
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from pathlib import Path
+import streamlit as st
 
 # Lade die .env-Datei exakt per Pfad
 dotenv_path = Path(__file__).resolve().parents[1] / ".env"
 load_dotenv(dotenv_path=dotenv_path)
 
-FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
-
+FINNHUB_API_KEY = st.secrets["FINNHUB_API_KEY"]
 # Finnhub news categories to fetch
 NEWS_CATEGORIES = ["general", "forex", "earnings", "economy"]
 
