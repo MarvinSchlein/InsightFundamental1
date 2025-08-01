@@ -7,12 +7,13 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 from news_processor import analyze_news
+import streamlit as st
 
 # Load environment variables
 load_dotenv()
 
 # === 1) Konfiguration ===
-API_KEY = os.getenv("FINNHUB_API_KEY")
+FINNHUB_API_KEY = st.secrets["FINNHUB_API_KEY"]
 if not API_KEY:
     print("❌ ERROR: FINNHUB_API_KEY ist nicht gesetzt. Bitte lege ihn mit\n"
           "   export FINNHUB_API_KEY=\"dein_key\"\n"
