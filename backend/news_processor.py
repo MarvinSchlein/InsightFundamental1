@@ -3,10 +3,11 @@ import os
 import json
 from dotenv import load_dotenv
 from datetime import datetime
+import streamlit as st
+
 
 load_dotenv()
-openai.api_key = os.getenv("OPENAI_API_KEY")
-
+OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
 def analyze_news(title, description):
     prompt = (
     f"You are a professional financial analyst. Your task is to analyze financial news articles exclusively in English.\n\n"
