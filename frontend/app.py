@@ -17,11 +17,10 @@ if "view" not in st.session_state:
     st.session_state["view"] = "landing"
 
 def redirect_to(page_name):
-    st.experimental_set_query_params(view=page_name)
+    st.query_params["view"] = page_name
     st.rerun()
 
-query_params = st.experimental_get_query_params()
-view = query_params.get("view", ["landing"])[0]
+view = st.query_params.get("view", "landing")
 
 # Lade .env Datei für lokale Entwicklung
 load_dotenv()
@@ -323,7 +322,8 @@ def save_users(users: dict):
     USER_FILE.write_text(json.dumps(users))
 
 def redirect_to(view: str):
-    st.experimental_set_query_params(view=view)
+    st.query_params["view"] = view
+    st.rerun()
 
 # Placeholder functions for password reset (not implemented)
 def generate_reset_token(email: str) -> str:
@@ -645,13 +645,8 @@ div[data-testid="column"]:nth-of-type(2) {
 
 # === Header mit Navigation ===
 
-try:
-    # New Streamlit API (1.28+)
-    params = dict(st.query_params)
-except AttributeError:
-    # Fallback for older Streamlit versions
-    params = st.experimental_get_query_params()
-view = params.get("view", ["landing"])[0]
+params = dict(st.query_params)
+view = params.get("view", "landing")
 
 # -- HEADER MIT HAMBURGER-BUTTON (nur auf News-Seite) ---
 
@@ -697,7 +692,7 @@ if 'logout' in params:
         del SESSION.impact_filter_news
     if "confidence_level_news" in SESSION:
         del SESSION.confidence_level_news
-    st.experimental_set_query_params(view="landing")
+    st.query_params["view"] = "landing"
     st.rerun()
 
 # === Landing-Page ===
@@ -2477,8 +2472,8 @@ if view == "cookie-hinweis":
 
 # === Passwort zurücksetzen ===
 if view == "reset_password":
-    params = st.experimental_get_query_params()
-    token = params.get("token", [None])[0]
+    params = dict(st.query_params)
+    token = params.get("token", None)
     email = verify_reset_token(token) if token else None
     
     if not email:
