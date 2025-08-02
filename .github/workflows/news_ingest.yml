@@ -33,8 +33,15 @@ jobs:
         run: python backend/news_ingest.py
 
       - name: Commit & push updated CSV
-        uses: stefanzweifel/git-auto-commit-action@v4
-        with:
-          github_token: ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
-          commit_message: "chore: hourly news ingestion"
-          file_pattern: "frontend/data/news_analysis_results.csv"
+        env:
+          GITHUB_TOKEN: ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add frontend/data/news_analysis_results.csv
+          if git diff --staged --quiet; then
+             echo "No changes to commit"
+          else
+            git commit -m "chore: hourly news ingestion"
+            git push
+          fi
