@@ -7,27 +7,27 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 from news_processor import analyze_news
-import streamlit as st
 
 # Load environment variables
 load_dotenv()
 
 # === 1) Konfiguration ===
+# API Key handling for both GitHub Actions and Streamlit Cloud
 try:
     import streamlit as st
-    FINNHUB_API_KEY = st.secrets["FINNHUB_API_KEY"]
+    FINNHUB_API_KEY = os.environ.get("FINNHUB_API_KEY") or st.secrets.get("FINNHUB_API_KEY", "")
 except (ImportError, AttributeError, KeyError):
-    import os
-    FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
-if not API_KEY:
+    FINNHUB_API_KEY = os.environ.get("FINNHUB_API_KEY")
+
+if not FINNHUB_API_KEY:
     print("❌ ERROR: FINNHUB_API_KEY ist nicht gesetzt. Bitte lege ihn mit\n"
           "   export FINNHUB_API_KEY=\"dein_key\"\n"
           "in deiner Shell ab und lade dein Profil neu (z.B. `source ~/.zshrc`).")
     exit(1)
 
 # Pfad zum Frontend-Datenordner
-DATA_DIR = Path(__file__).parent.parent / "data"
-OUTPUT   = DATA_DIR / "news_analysis_results.csv"
+DATA_DIR = Path(__file__).parent.parent / "frontend" / "data"
+OUTPUT = DATA_DIR / "news_analysis_results.csv"
 
 # Finnhub news categories to fetch
 NEWS_CATEGORIES = ["general", "forex", "earnings", "economy"]
@@ -104,7 +104,7 @@ def main():
     print(f"[{now.isoformat()}] Fetching articles from "
           f"{one_hour_ago.isoformat()} to {now.isoformat()}…")
 
-    articles = fetch_latest_articles(API_KEY, one_hour_ago, now)
+    articles = fetch_latest_articles(FINNHUB_API_KEY, one_hour_ago, now)
 
     analyzed_articles = []
 
