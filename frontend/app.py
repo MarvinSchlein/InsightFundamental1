@@ -1169,7 +1169,7 @@ if view == "login":
     .login-card .stCheckbox span {
         color: #000000 !important;
     }
-    .login-checkbox .stCheckbox span {
+    .stay-checkbox .stCheckbox span {
         color: #000000 !important;
     }
     </style>
@@ -1260,7 +1260,7 @@ if view == "register":
     .register-card .stCheckbox span {
         color: #000000 !important;
     }
-    .register-checkbox .stCheckbox span {
+    .terms-checkbox .stCheckbox span {
         color: #000000 !important;
     }
     </style>
