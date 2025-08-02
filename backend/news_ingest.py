@@ -13,7 +13,12 @@ import streamlit as st
 load_dotenv()
 
 # === 1) Konfiguration ===
-FINNHUB_API_KEY = st.secrets["FINNHUB_API_KEY"]
+try:
+    import streamlit as st
+    FINNHUB_API_KEY = st.secrets["FINNHUB_API_KEY"]
+except (ImportError, AttributeError, KeyError):
+    import os
+    FINNHUB_API_KEY = os.getenv("FINNHUB_API_KEY")
 if not API_KEY:
     print("❌ ERROR: FINNHUB_API_KEY ist nicht gesetzt. Bitte lege ihn mit\n"
           "   export FINNHUB_API_KEY=\"dein_key\"\n"
