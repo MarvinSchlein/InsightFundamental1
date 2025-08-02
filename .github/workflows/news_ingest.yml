@@ -29,9 +29,10 @@ jobs:
           fi
 
       - name: Run news_ingest.py
-        env:
-          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
-        run: python backend/news_ingest.py
+      env:
+        FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      run: python backend/news_ingest.py
 
       - name: Commit & push updated CSV
         uses: stefanzweifel/git-auto-commit-action@v4
