@@ -13,35 +13,36 @@ try:
 except (ImportError, AttributeError, KeyError):
     OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 
-# Set OpenAI API key
+# Initialize OpenAI client (new API style)
 if OPENAI_API_KEY:
-    openai.api_key = OPENAI_API_KEY
+    client = openai.OpenAI(api_key=OPENAI_API_KEY)
 else:
     print("❌ ERROR: OPENAI_API_KEY ist nicht gesetzt.")
+    client = None
 
 def analyze_news(title, description):
+    if not client:
+        return get_fallback_analysis(title, description)
+        
     prompt = (
         f"You are a professional financial analyst. Your task is to analyze financial news articles exclusively in English.\n\n"
         f"Title: {title}\n"
         f"Description: {description}\n\n"
         f"Respond with a valid JSON object including the following fields:\n"
-        f"- sentiment: One of: 'Economy', 'Politics', 'Finance', 'Technology'\n"
-        f"- markets: Affected markets or sectors\n"
-        f"- intensity: weak, medium, or strong\n"
         f"- impact: A number between -10 (very bearish) and +10 (very bullish)\n"
         f"- confidence: high, medium, or low\n"
-        f"- patterns: Similar historical events (in English)\n"
-        f"- description: A high-quality summary of the news article (80–120 words, in English)\n"
-        f"- explanation: A detailed reasoning (at least 200 words, in English)\n\n"
+        f"- markets: Affected markets or sectors (comma-separated)\n"
+        f"- patterns: Similar historical events (in English, max 100 words)\n"
+        f"- explanation: A detailed reasoning (at least 150 words, in English)\n\n"
         f"IMPORTANT:\n"
         f"- All text content must be written in **English** only.\n"
         f"- Return only valid JSON – no markdown, no explanation, no commentary.\n"
         f"- Example response:\n"
-        f"{{\"sentiment\": \"Finance\", \"markets\": \"S&P 500\", ... }}"
+        f"{{\"impact\": 3, \"confidence\": \"medium\", \"markets\": \"S&P 500, Tech\", \"patterns\": \"Similar to...\", \"explanation\": \"This news indicates...\"}}"
     )
     
     try:
-        response = openai.chat.completions.create(
+        response = client.chat.completions.create(
             model="gpt-4",
             messages=[{"role": "user", "content": prompt}],
             temperature=0.5,
@@ -49,40 +50,40 @@ def analyze_news(title, description):
         )
         raw = response.choices[0].message.content.strip()
         
+        # Remove markdown code blocks if present
+        if raw.startswith("```json"):
+            raw = raw[7:]
+        if raw.endswith("```"):
+            raw = raw[:-3]
+        raw = raw.strip()
+        
         try:
             parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            print("⚠️ Error parsing JSON. Original response:")
-            print(raw)
-            parsed = {
-                "sentiment": "Finance",
-                "markets": "-",
-                "intensity": "medium",
-                "impact": 0,
-                "confidence": "medium",
-                "patterns": "-",
-                "description": description,
-                "explanation": raw
-            }
+            print(f"✅ Successfully analyzed: {title[:50]}...")
+        except json.JSONDecodeError as je:
+            print(f"⚠️ JSON parsing error for '{title[:30]}...': {je}")
+            print(f"Raw response: {raw}")
+            return get_fallback_analysis(title, description)
         
+        # Ensure all required fields are present with proper types
         return {
-            "title": title,
-            "description": parsed.get("description", description),
-            "publishedAt": datetime.now().isoformat(),
-            **parsed
+            "impact": str(parsed.get("impact", 0)),
+            "confidence": parsed.get("confidence", "medium"),
+            "markets": parsed.get("markets", "Unknown"),
+            "patterns": parsed.get("patterns", "No historical patterns identified"),
+            "explanation": parsed.get("explanation", "Analysis not available")
         }
         
     except Exception as e:
-        print("❌ Error with OpenAI:", e)
-        return {
-            "title": title,
-            "description": description,
-            "publishedAt": datetime.now().isoformat(),
-            "sentiment": "Finance",
-            "markets": "-",
-            "intensity": "medium",
-            "impact": 0,
-            "confidence": "medium",
-            "patterns": "-",
-            "explanation": "Analysis not available."
-        }
+        print(f"❌ Error with OpenAI analysis for '{title[:30]}...': {e}")
+        return get_fallback_analysis(title, description)
+
+def get_fallback_analysis(title, description):
+    """Fallback analysis when OpenAI fails"""
+    return {
+        "impact": "0",
+        "confidence": "low",
+        "markets": "General",
+        "patterns": "Analysis unavailable due to API error",
+        "explanation": f"Unable to analyze article: {title}. Description: {description[:100]}..."
+    }
