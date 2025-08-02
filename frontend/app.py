@@ -405,6 +405,15 @@ label, .stTextInput label, .stCheckbox span, .st-bb, .st-c6, .st-c7 {
     font-weight: 600;
 }
 
+/* Comprehensive checkbox text color fixes */
+.stCheckbox label, .stCheckbox span, .stCheckbox div, .stCheckbox * {
+    color: #000000 !important;
+}
+/* Specific targeting for login and register pages */
+div[class*="checkbox"] .stCheckbox *, div[class*="checkbox"] label, div[class*="checkbox"] span {
+    color: #000000 !important;
+}
+
 /* Input-Feld rechts ohne Rand und ohne Border-Radius, wenn Button daneben */
 .stTextInput>div>div>input[type="password"] {
     border-right: none !important;
@@ -1172,6 +1181,13 @@ if view == "login":
     .stay-checkbox .stCheckbox span {
         color: #000000 !important;
     }
+    /* Comprehensive checkbox text targeting for login */
+    .stay-checkbox *, .stay-checkbox label, .stay-checkbox span, .stay-checkbox div {
+        color: #000000 !important;
+    }
+    .login-card .stCheckbox *, .login-card .stCheckbox label, .login-card .stCheckbox span {
+        color: #000000 !important;
+    }
     </style>
     """, unsafe_allow_html=True)
     
@@ -1261,6 +1277,13 @@ if view == "register":
         color: #000000 !important;
     }
     .terms-checkbox .stCheckbox span {
+        color: #000000 !important;
+    }
+    /* Comprehensive checkbox text targeting for register */
+    .terms-checkbox *, .terms-checkbox label, .terms-checkbox span, .terms-checkbox div {
+        color: #000000 !important;
+    }
+    .register-card .stCheckbox *, .register-card .stCheckbox label, .register-card .stCheckbox span {
         color: #000000 !important;
     }
     </style>
