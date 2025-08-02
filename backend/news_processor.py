@@ -66,10 +66,13 @@ def analyze_news(title, description):
             return get_fallback_analysis(title, description)
         
         # Ensure all required fields are present with proper types
+        # ANGEPASST AN DEIN CSV-FORMAT:
         return {
+            "sentiment": parsed.get("sentiment", "Finance"),
+            "markets": parsed.get("markets", "Unknown"), 
+            "intensity": parsed.get("intensity", "medium"),
             "impact": str(parsed.get("impact", 0)),
             "confidence": parsed.get("confidence", "medium"),
-            "markets": parsed.get("markets", "Unknown"),
             "patterns": parsed.get("patterns", "No historical patterns identified"),
             "explanation": parsed.get("explanation", "Analysis not available")
         }
