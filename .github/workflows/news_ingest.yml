@@ -1,27 +1,27 @@
 name: "News-Ingestion"
-
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 * * * *'  # Korrigiert: 5 Felder (jede Stunde zur vollen Stunde)
   workflow_dispatch:
 
 jobs:
   ingest:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
 
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: '3.11'
 
       - name: Install dependencies
         run: |
           pip install --upgrade pip
-          pip install requests
+          pip install requests python-dotenv openai
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
@@ -30,7 +30,22 @@ jobs:
         env:
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python backend/news_ingest.py
+        run: |
+          echo "Starting news ingestion..."
+          python backend/news_ingest.py
+          echo "News ingestion completed"
+
+      - name: Check if CSV exists and has content
+        run: |
+          if [ -f "data/news_analysis_results.csv" ]; then
+            echo "CSV file exists"
+            echo "CSV file size: $(wc -l < data/news_analysis_results.csv) lines"
+            echo "Last 3 lines of CSV:"
+            tail -3 data/news_analysis_results.csv || echo "CSV is empty or has fewer than 3 lines"
+          else
+            echo "CSV file does not exist"
+            ls -la data/ || echo "Data directory does not exist"
+          fi
 
       - name: Commit & push updated CSV
         env:
@@ -38,10 +53,16 @@ jobs:
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
+          
+          # Add the CSV file
           git add data/news_analysis_results.csv
+          
+          # Check if there are changes to commit
           if git diff --staged --quiet; then
              echo "No changes to commit"
           else
-            git commit -m "chore: hourly news ingestion"
+            echo "Changes detected, committing..."
+            git commit -m "chore: hourly news ingestion - $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
             git push
+            echo "Changes pushed successfully"
           fi
