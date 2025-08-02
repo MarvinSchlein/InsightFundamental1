@@ -25,8 +25,8 @@ if not FINNHUB_API_KEY:
           "in deiner Shell ab und lade dein Profil neu (z.B. `source ~/.zshrc`).")
     exit(1)
 
-# Pfad zum Frontend-Datenordner
-DATA_DIR = Path(__file__).parent.parent / "frontend" / "data"
+# Pfad zum Datenordner
+DATA_DIR = Path(__file__).parent.parent / "data"
 OUTPUT = DATA_DIR / "news_analysis_results.csv"
 
 # Finnhub news categories to fetch
