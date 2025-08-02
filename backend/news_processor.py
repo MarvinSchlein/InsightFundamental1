@@ -7,7 +7,12 @@ import streamlit as st
 
 
 load_dotenv()
-OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+try:
+    import streamlit as st
+    OPENAI_API_KEY = st.secrets["OPENAI_API_KEY"]
+except (ImportError, AttributeError, KeyError):
+    import os
+    OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 def analyze_news(title, description):
     prompt = (
     f"You are a professional financial analyst. Your task is to analyze financial news articles exclusively in English.\n\n"
