@@ -1,6 +1,4 @@
-# .github/workflows/news_ingest.yml
-# yaml-language-server: $schema=https://json.schemastore.org/github-workflow.json
-name: 📰 News-Ingestion
+name: "News-Ingestion"
 
 on:
   schedule:
@@ -29,15 +27,14 @@ jobs:
           fi
 
       - name: Run news_ingest.py
-      env:
-        FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
-        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-      run: python backend/news_ingest.py
+        env:
+          FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python backend/news_ingest.py
 
       - name: Commit & push updated CSV
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          # hier dein Fine-grained Personal Access Token
           github_token: ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
           commit_message: "chore: hourly news ingestion"
           file_pattern: "frontend/data/news_analysis_results.csv"
