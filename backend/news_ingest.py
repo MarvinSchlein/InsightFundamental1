@@ -117,7 +117,7 @@ def append_to_csv(articles: list, path: Path):
 def main():
     now = datetime.now(timezone.utc)
     # Erweitere Zeitfenster auf 6 Stunden für mehr Artikel
-    hours_back = 24
+    hours_back = 1
     time_ago = now - timedelta(hours=hours_back)
     
     print(f"🕐 Current time: {now.isoformat()}")
