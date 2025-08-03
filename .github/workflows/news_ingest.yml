@@ -1,28 +1,21 @@
 name: "News-Ingestion"
 on:
   schedule:
-    - cron: '0 * * * *'
+    - cron: '0 * * * *'  # Korrigiert: 5 Felder (jede Stunde zur vollen Stunde)
   workflow_dispatch:
-
-# ✅ DIESE PERMISSIONS HINZUFÜGEN:
-permissions:
-  contents: write
-  metadata: read
 
 jobs:
   ingest:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
-          
+        uses: actions/checkout@v3
+
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.11'
-          
+
       - name: Install dependencies
         run: |
           pip install --upgrade pip
@@ -30,80 +23,44 @@ jobs:
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
-          
-      - name: Create data directory
-        run: |
-          mkdir -p data
-          echo "📁 Data directory created/verified"
-          
+
       - name: Run news_ingest.py
         env:
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: |
-          echo "🚀 Starting news ingestion..."
-          cd backend
-          python news_ingest.py
-          echo "✅ News ingestion completed"
-          
-      - name: Debug - Check file structure
-        run: |
-          echo "📂 Repository structure:"
-          find . -name "*.csv" -o -name "*.py" | head -20
-          echo ""
-          echo "📁 Data directory contents:"
-          ls -la data/ || echo "❌ Data directory does not exist"
-          
+          echo "Starting news ingestion..."
+          python backend/news_ingest.py
+          echo "News ingestion completed"
+
       - name: Check if CSV exists and has content
         run: |
           if [ -f "data/news_analysis_results.csv" ]; then
-            echo "✅ CSV file exists"
-            file_size=$(wc -l < data/news_analysis_results.csv)
-            echo "📊 CSV file has $file_size lines"
-            
-            if [ $file_size -gt 1 ]; then
-              echo "📈 Sample content (first 3 lines):"
-              head -3 data/news_analysis_results.csv
-              echo ""
-              echo "📈 Latest entries (last 3 lines):"
-              tail -3 data/news_analysis_results.csv
-            else
-              echo "⚠️ CSV file exists but appears to be empty or only has header"
-            fi
+            echo "CSV file exists"
+            echo "CSV file size: $(wc -l < data/news_analysis_results.csv) lines"
+            echo "Last 3 lines of CSV:"
+            tail -3 data/news_analysis_results.csv || echo "CSV is empty or has fewer than 3 lines"
           else
-            echo "❌ CSV file does not exist at data/news_analysis_results.csv"
-            echo "🔍 Searching for any CSV files:"
-            find . -name "*.csv" || echo "No CSV files found"
+            echo "CSV file does not exist"
+            ls -la data/ || echo "Data directory does not exist"
           fi
-          
+
       - name: Commit & push updated CSV
         env:
           GITHUB_TOKEN: ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
         run: |
-          # Git Konfiguration
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           
-          # Status prüfen
-          echo "📊 Git status before adding files:"
-          git status
+          # Add the CSV file
+          git add data/news_analysis_results.csv
           
-          # CSV-Datei hinzufügen (falls vorhanden)
-          if [ -f "data/news_analysis_results.csv" ]; then
-            git add data/news_analysis_results.csv
-            echo "✅ Added CSV file to git"
-          else
-            echo "⚠️ No CSV file to add"
-          fi
-          
-          # Prüfen ob Änderungen vorhanden sind
+          # Check if there are changes to commit
           if git diff --staged --quiet; then
-             echo "ℹ️ No changes to commit"
+             echo "No changes to commit"
           else
-            echo "🔄 Changes detected, committing..."
+            echo "Changes detected, committing..."
             git commit -m "chore: hourly news ingestion - $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-            
-            echo "🚀 Pushing changes..."
             git push
-            echo "✅ Changes pushed successfully"
+            echo "Changes pushed successfully"
           fi
