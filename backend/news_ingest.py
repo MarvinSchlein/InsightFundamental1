@@ -107,7 +107,7 @@ def append_to_csv(articles: list, path: Path):
 # === 4) Hauptfunktion ===
 def main():
     now = datetime.now(timezone.utc)
-    hours_back = int(os.getenv("ARTICLE_LOOKBACK_HOURS", 1))
+    hours_back = int(os.getenv("ARTICLE_LOOKBACK_HOURS", 6))
     time_ago = now - timedelta(hours=hours_back)
 
     print(f"🕐 Current time: {now.isoformat()}")
