@@ -1,3 +1,4 @@
+
 name: "News-Ingestion"
 on:
   schedule:
@@ -23,17 +24,14 @@ jobs:
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
-
       - name: Run news_ingest.py
         env:
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          ARTICLE_LOOKBACK_HOURS: "6"
         run: |
           echo "Starting news ingestion..."
           python backend/news_ingest.py
           echo "News ingestion completed"
-
       - name: Check if CSV exists and has content
         run: |
           if [ -f "data/news_analysis_results.csv" ]; then
@@ -45,7 +43,6 @@ jobs:
             echo "CSV file does not exist"
             ls -la data/ || echo "Data directory does not exist"
           fi
-
       - name: Commit & push updated CSV
         env:
           GITHUB_TOKEN: ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
