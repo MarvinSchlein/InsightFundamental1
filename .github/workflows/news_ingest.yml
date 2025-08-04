@@ -28,6 +28,7 @@ jobs:
         env:
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ARTICLE_LOOKBACK_HOURS: "6"
         run: |
           echo "Starting news ingestion..."
           python backend/news_ingest.py
