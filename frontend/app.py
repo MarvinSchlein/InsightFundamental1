@@ -1693,6 +1693,11 @@ if view in ["news", "Alle Nachrichten"]:
         
         data_file = Path("data/news_analysis_results.csv")
         df = pd.read_csv(data_file) if data_file.exists() else pd.DataFrame()
+
+    # Sortiere nach Datum, neueste zuerst
+        if not df.empty and "date" in df.columns:
+            df["date"] = pd.to_datetime(df["date"], errors="coerce")  # optional aber hilfreich
+            df = df.sort_values(by="date", ascending=False)
         
         # Mapping für deutsche zu englischen Confidence-Werten
         confidence_map = {"hoch": "high", "mittel": "medium", "niedrig": "low"}
