@@ -1,4 +1,3 @@
-
 name: "News-Ingestion"
 on:
   schedule:
@@ -24,6 +23,7 @@ jobs:
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           fi
+
       - name: Run news_ingest.py
         env:
           FINNHUB_API_KEY: ${{ secrets.FINNHUB_API_KEY }}
@@ -32,6 +32,7 @@ jobs:
           echo "Starting news ingestion..."
           python backend/news_ingest.py
           echo "News ingestion completed"
+
       - name: Check if CSV exists and has content
         run: |
           if [ -f "data/news_analysis_results.csv" ]; then
@@ -43,25 +44,23 @@ jobs:
             echo "CSV file does not exist"
             ls -la data/ || echo "Data directory does not exist"
           fi
+
       - name: Commit & push updated CSV
-  env:
-    PAT_TOKEN: ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
-  run: |
-    git config --local user.email "action@github.com"
-    git config --local user.name "GitHub Action"
-
-    git add data/news_analysis_results.csv
-
-    if git diff --staged --quiet; then
-      echo "No changes to commit"
-    else
-      echo "Changes detected, committing..."
-      git commit -m "chore: hourly news ingestion - $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-
-      # ⬇️ WICHTIG: Remote-URL mit PAT setzen
-      git remote set-url origin https://MarvinSchlein:${PAT_TOKEN}@github.com/MarvinSchlein/InsightFundamental1.git
-
-      # ⬇️ Push auf main ausführen
-      git push origin main
-      echo "Changes pushed successfully"
-    fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          
+          # Add the CSV file
+          git add data/news_analysis_results.csv
+          
+          # Check if there are changes to commit
+          if git diff --staged --quiet; then
+             echo "No changes to commit"
+          else
+            echo "Changes detected, committing..."
+            git commit -m "chore: hourly news ingestion - $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            git push
+            echo "Changes pushed successfully"
+          fi
