@@ -44,22 +44,24 @@ jobs:
             ls -la data/ || echo "Data directory does not exist"
           fi
       - name: Commit & push updated CSV
-        env:
-          GITHUB_TOKEN: ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          
-          # Add the CSV file
-          git add data/news_analysis_results.csv
-          
-          # Check if there are changes to commit
-          if git diff --staged --quiet; then
-             echo "No changes to commit"
-          else
-            echo "Changes detected, committing..."
-            git commit -m "chore: hourly news ingestion - $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-            git remote set-url origin https://MarvinSchlein:${{ secrets.INSIGHTFUNDAMENTAL_PAT }}@github.com/MarvinSchlein/InsightFundamental1.git
-            git push origin main
-            echo "Changes pushed successfully"
-          fi
+  env:
+    PAT_TOKEN: ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
+  run: |
+    git config --local user.email "action@github.com"
+    git config --local user.name "GitHub Action"
+
+    git add data/news_analysis_results.csv
+
+    if git diff --staged --quiet; then
+      echo "No changes to commit"
+    else
+      echo "Changes detected, committing..."
+      git commit -m "chore: hourly news ingestion - $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+
+      # ⬇️ WICHTIG: Remote-URL mit PAT setzen
+      git remote set-url origin https://MarvinSchlein:${PAT_TOKEN}@github.com/MarvinSchlein/InsightFundamental1.git
+
+      # ⬇️ Push auf main ausführen
+      git push origin main
+      echo "Changes pushed successfully"
+    fi
