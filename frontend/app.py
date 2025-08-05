@@ -1316,9 +1316,8 @@ if view == "register":
                     SESSION.username = email
                     SESSION.user_plan = "paid"
                     stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
-                    st.markdown(f"""
-                        <meta http-equiv="refresh" content="0; url={stripe_url}" />
-                    """, unsafe_allow_html=True)
+                    st.success("Dein Account wurde erfolgreich erstellt!")
+                    st.markdown(f"[Jetzt InsightFundamental abonnieren]({stripe_url})", unsafe_allow_html=True)
                     st.stop()
         
         st.markdown('</div>', unsafe_allow_html=True)
