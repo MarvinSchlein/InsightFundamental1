@@ -1317,8 +1317,19 @@ if view == "register":
                     SESSION.user_plan = "paid"
                     stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
                     st.success("Dein Account wurde erfolgreich erstellt!")
-                    st.markdown(f"[Jetzt InsightFundamental abonnieren]({stripe_url})", unsafe_allow_html=True)
-                    st.stop()
+                    stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
+                    st.success("Dein Account wurde erfolgreich erstellt!")
+
+                    if st.button("Jetzt InsightFundamental abonnieren"):
+                        st.markdown(
+                            f"""
+                            <script>
+                                window.location.href = "{stripe_url}";
+                            </script>
+                            """,
+                            unsafe_allow_html=True
+                        )
+                        st.stop()
         
         st.markdown('</div>', unsafe_allow_html=True)
 
