@@ -1316,9 +1316,8 @@ if view == "register":
                     SESSION.username = email
                     SESSION.user_plan = "paid"
                     stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
-                    st.success("Dein Account wurde erfolgreich erstellt!")
-                    stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
-                    st.success("Dein Account wurde erfolgreich erstellt!")
+
+                    st.success("Your account has been successfully created!")
 
                     if st.button("Start 14-day free trial now!"):
                         st.markdown(
