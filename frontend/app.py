@@ -2584,4 +2584,4 @@ if view == "reset_password":
                 st.markdown(f'<a href="/?view=login" class="button">{get_text("to_login")}</a>', unsafe_allow_html=True)
         
         st.markdown('</div>', unsafe_allow_html=True)
-    st.stop()
+st.stop()
