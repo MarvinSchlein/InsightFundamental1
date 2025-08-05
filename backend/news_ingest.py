@@ -80,38 +80,64 @@ def fetch_latest_articles(api_key: str, from_dt: datetime, to_dt: datetime):
 
 # === 3) CSV schreiben (KORRIGIERTES FORMAT) ===
 def append_to_csv(articles: list, path: Path):
-    # WICHTIG: Format angepasst an bestehende CSV!
-    fieldnames = ["title","description","publishedAt","sentiment","markets","intensity","impact","confidence","patterns","explanation","image"]
-    new_file   = not path.exists()
+    fieldnames = [
+        "title", "description", "publishedAt", "sentiment", "markets",
+        "intensity", "impact", "confidence", "patterns", "explanation", "image"
+    ]
+    
     path.parent.mkdir(parents=True, exist_ok=True)
 
-    print(f"📝 Writing {len(articles)} articles to {path}")
-    print(f"📁 File exists: {path.exists()}")
+    # === 1) Bestehende Einträge aus der CSV lesen ===
+    existing_entries = set()
+    if path.exists():
+        with open(path, "r", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                key = (row["title"].strip(), row["publishedAt"].strip())
+                existing_entries.add(key)
 
+    # === 2) Neue Artikel filtern ===
+    new_articles = []
+    for a in articles:
+        title = a.get("headline", "").strip()
+        published_at = datetime.fromtimestamp(
+            a.get("datetime", 0), tz=timezone.utc
+        ).isoformat()
+        key = (title, published_at)
+        if key not in existing_entries:
+            a["publishedAtISO"] = published_at
+            new_articles.append(a)
+
+    if not new_articles:
+        print("ℹ️  Keine neuen Artikel zum Schreiben – alles bereits vorhanden.")
+        return
+
+    print(f"📝 Schreiben von {len(new_articles)} neuen Artikeln in {path}")
+
+    # === 3) Neue Artikel anhängen ===
+    write_header = not path.exists()
     with open(path, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
-        if new_file:
+        if write_header:
             writer.writeheader()
-            print("📋 Added CSV header")
-        for a in articles:
-            # Convert Unix timestamp to ISO format
-            published_at = datetime.fromtimestamp(a.get('datetime', 0), tz=timezone.utc).isoformat()
-            
+            print("📋 CSV-Header hinzugefügt")
+
+        for a in new_articles:
             writer.writerow({
-                "title":          a.get("headline", ""),
-                "description":    a.get("summary", ""),
-                "publishedAt":    published_at,
-                "sentiment":      a.get("sentiment", "Finance"),  # From analysis
-                "markets":        a.get("markets", ""),           # From analysis
-                "intensity":      a.get("intensity", "medium"),   # From analysis
-                "impact":         a.get("impact", "0"),           # From analysis
-                "confidence":     a.get("confidence", "medium"),  # From analysis
-                "patterns":       a.get("patterns", ""),         # From analysis
-                "explanation":    a.get("explanation", ""),      # From analysis
-                "image":          ""  # Empty for now
+                "title":       a.get("headline", ""),
+                "description": a.get("summary", ""),
+                "publishedAt": a.get("publishedAtISO"),
+                "sentiment":   a.get("sentiment", "Finance"),
+                "markets":     a.get("markets", ""),
+                "intensity":   a.get("intensity", "medium"),
+                "impact":      a.get("impact", "0"),
+                "confidence":  a.get("confidence", "medium"),
+                "patterns":    a.get("patterns", ""),
+                "explanation": a.get("explanation", ""),
+                "image":       ""
             })
-    
-    print(f"✅ Successfully wrote {len(articles)} articles to CSV")
+
+    print(f"✅ {len(new_articles)} Artikel erfolgreich angehängt.")
 
 # === 4) Hauptfunktion ===
 def main():
