@@ -1320,7 +1320,7 @@ if view == "register":
                     stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
                     st.success("Dein Account wurde erfolgreich erstellt!")
 
-                    if st.button("Jetzt InsightFundamental abonnieren"):
+                    if st.button("Start 14-day free trial now!"):
                         st.markdown(
                             f"""
                             <script>
