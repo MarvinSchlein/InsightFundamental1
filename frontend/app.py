@@ -1315,9 +1315,7 @@ if view == "register":
                     SESSION.logged_in = True
                     SESSION.username = email
                     SESSION.user_plan = "paid"
-                    # Weiterleitung auf Stripe-Testphase
                     stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
-                    st.experimental_set_query_params()  # optional, falls du Parameter resetten willst
                     st.markdown(f"""
                         <meta http-equiv="refresh" content="0; url={stripe_url}" />
                     """, unsafe_allow_html=True)
