@@ -43,25 +43,25 @@ jobs:
             ls -la data/ || echo "Data directory does not exist"
           fi
             
-            - name: Commit & push updated CSV
-              env:
-                GITHUB_TOKEN: ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
-              run: |
-                git config --local user.email "action@github.com"
-                git config --local user.name "GitHub Action"
+      - name: Commit & push updated CSV
+        env:
+          GITHUB_TOKEN: ${{ secrets.INSIGHTFUNDAMENTAL_PAT }}
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
 
-                git add data/news_analysis_results.csv
+          git add data/news_analysis_results.csv
 
-                if git diff --staged --quiet; then
-                   echo "No changes to commit"
-                else
-                  echo "Changes detected, committing..."
-                  git commit -m "chore: hourly news ingestion - $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          if git diff --staged --quiet; then
+             echo "No changes to commit"
+          else
+            echo "Changes detected, committing..."
+            git commit -m "chore: hourly news ingestion - $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
 
-                  # Token-basierte Authentifizierung setzen
-                  git remote set-url origin https://x-access-token:${{ secrets.INSIGHTFUNDAMENTAL_PAT }}@github.com/${{ github.repository }}
+            # Token-basierte Authentifizierung setzen
+            git remote set-url origin https://x-access-token:${{ secrets.INSIGHTFUNDAMENTAL_PAT }}@github.com/${{ github.repository }}
 
-                  # Push
-                  git push origin main
-                  echo "Changes pushed successfully"
-                fi
+            # Push
+            git push origin main
+            echo "Changes pushed successfully"
+          fi
