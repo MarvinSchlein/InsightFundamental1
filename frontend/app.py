@@ -1290,6 +1290,7 @@ if view == "register":
         email = st.text_input("Email", key="reg_email")
         pwd = st.text_input("Password", type="password", key="reg_pwd")
         pwd_confirm = st.text_input("Confirm Password", type="password", key="reg_pwd_confirm")
+        
         st.markdown('<div class="terms-checkbox">', unsafe_allow_html=True)
         agb = st.checkbox("I accept the Terms and Conditions", key="reg_agb")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1312,12 +1313,18 @@ if view == "register":
 
                     st.success("Your account has been successfully created!")
 
-                    # ✅ Stripe redirect (stable and clean)
+                    # ✅ Stripe Checkout button
                     stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
                     st.markdown(
-                        f'<a href="{stripe_url}" target="_self">'
-                        f'<button style="margin-top:1rem;">Start 14-day free trial now!</button>'
-                        f'</a>',
+                        f"""
+                        <div style='margin-top: 1.5rem; text-align: center;'>
+                            <a href="{stripe_url}" target="_blank">
+                                <button style='padding: 0.6em 1.2em; font-size: 1.1em; border-radius: 8px; background-color: #635bff; color: white; border: none; cursor: pointer;'>
+                                    Start 14-day free trial now!
+                                </button>
+                            </a>
+                        </div>
+                        """,
                         unsafe_allow_html=True
                     )
                     st.stop()
