@@ -1312,10 +1312,15 @@ if view == "register":
 
                     st.success("Your account has been successfully created!")
 
+                    # ✅ Stripe redirect (reliable way)
                     stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
-                    st.markdown(
-                        f'<a href="{stripe_url}" target="_self"><button style="margin-top:1rem;">Start 14-day free trial now!</button></a>',
-                        unsafe_allow_html=True
+                    st.components.v1.html(
+                        f"""
+                        <script>
+                            window.location.href = "{stripe_url}";
+                        </script>
+                        """,
+                        height=0,
                     )
                     st.stop()
 
