@@ -11,6 +11,8 @@ import requests
 import os
 from dotenv import load_dotenv
 load_dotenv()
+from backend.email_utils import send_reset_email
+
 
 # 👉 Navigations-Setup (einmalig zu Beginn der Datei):
 if "view" not in st.session_state:
