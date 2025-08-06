@@ -1228,7 +1228,7 @@ if view == "login":
         
         st.markdown('</div>', unsafe_allow_html=True)
 
-# === Registrierung ===
+# === Registration ===
 
 if view == "register":
     st.markdown("""
@@ -1276,60 +1276,49 @@ if view == "register":
     .register-card .stCheckbox span {
         color: #000000 !important;
     }
-    .terms-checkbox .stCheckbox span {
-        color: #000000 !important;
-    }
-    /* Comprehensive checkbox text targeting for register */
     .terms-checkbox *, .terms-checkbox label, .terms-checkbox span, .terms-checkbox div {
-        color: #000000 !important;
-    }
-    .register-card .stCheckbox *, .register-card .stCheckbox label, .register-card .stCheckbox span {
         color: #000000 !important;
     }
     </style>
     """, unsafe_allow_html=True)
-    cols = st.columns([2,1,2])
+
+    cols = st.columns([2, 1, 2])
     with cols[1]:
         st.markdown('<div class="register-card">', unsafe_allow_html=True)
-        st.markdown(f'<h2>{get_text("register_title")}</h2>', unsafe_allow_html=True)
-        
-        email = st.text_input(get_text("email"), key="reg_email")
-        pwd = st.text_input(get_text("password"), type="password", key="reg_pwd")
-        pwd_confirm = st.text_input(get_text("confirm_password"), type="password", key="reg_pwd_confirm")
+        st.markdown('<h2>Register</h2>', unsafe_allow_html=True)
+
+        email = st.text_input("Email", key="reg_email")
+        pwd = st.text_input("Password", type="password", key="reg_pwd")
+        pwd_confirm = st.text_input("Confirm Password", type="password", key="reg_pwd_confirm")
         st.markdown('<div class="terms-checkbox">', unsafe_allow_html=True)
-        agb = st.checkbox(get_text("accept_terms"), key="reg_agb")
+        agb = st.checkbox("I accept the Terms and Conditions", key="reg_agb")
         st.markdown('</div>', unsafe_allow_html=True)
-        
-        if st.button(get_text("register_button")):
+
+        if st.button("Register"):
             if not agb:
-                st.error(get_text("accept_terms_error"))
+                st.error("You must accept the terms to register.")
             elif pwd != pwd_confirm:
-                st.error(get_text("passwords_dont_match"))
+                st.error("Passwords do not match.")
             else:
                 users = json.loads(USER_FILE.read_text())
                 if email in users:
-                    st.error(get_text("email_already_registered"))
+                    st.error("This email is already registered.")
                 else:
                     users[email] = hashlib.sha256(pwd.encode()).hexdigest()
                     save_users(users)
                     SESSION.logged_in = True
                     SESSION.username = email
                     SESSION.user_plan = "paid"
-                    stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
 
                     st.success("Your account has been successfully created!")
 
-                    if st.button("Start 14-day free trial now!"):
-                        st.markdown(
-                            f"""
-                            <script>
-                                window.location.href = "{stripe_url}";
-                            </script>
-                            """,
-                            unsafe_allow_html=True
-                        )
-                        st.stop()
-        
+                    stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
+                    st.markdown(
+                        f'<a href="{stripe_url}" target="_self"><button style="margin-top:1rem;">Start 14-day free trial now!</button></a>',
+                        unsafe_allow_html=True
+                    )
+                    st.stop()
+
         st.markdown('</div>', unsafe_allow_html=True)
 
 # === Stripe-Testphase-Platzhalterseite ===
