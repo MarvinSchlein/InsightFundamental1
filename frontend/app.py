@@ -1555,11 +1555,15 @@ def translate_text(text, target_lang):
     else:
         return text
 
-# === News-Startseite ===
+# === News-Startseite (nur für zahlende Nutzer) ===
 
 if view in ["news", "Alle Nachrichten"]:
-    # Allow access to news page without login
-    
+    # Zugriff nur für eingeloggte und zahlende Nutzer
+    if not SESSION.logged_in or SESSION.user_plan != "paid":
+        st.warning("Access denied. You must start the free trial to access the News Analysis.")
+        st.markdown('<a href="/?view=register">Go to registration</a>', unsafe_allow_html=True)
+        st.stop()
+
     st.markdown("<style>.block-container {padding-top: 0.5rem !important;}</style>", unsafe_allow_html=True)
 
     # --- Linke Spalte: Dashboard ---
