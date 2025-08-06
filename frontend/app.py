@@ -1314,14 +1314,14 @@ if view == "register":
 
                     # ✅ Stripe redirect (reliable way)
                     stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
-                    st.components.v1.html(
-                        f"""
+                    if st.button("Start 14-day free trial now!"):
+                        js_code = f"""
                         <script>
-                            window.location.href = "{stripe_url}";
+                            window.open("{stripe_url}", "_self");
                         </script>
-                        """,
-                        height=0,
-                    )
+                        """
+                        st.components.v1.html(js_code, height=0)
+                        st.stop()
                     st.stop()
 
         st.markdown('</div>', unsafe_allow_html=True)
