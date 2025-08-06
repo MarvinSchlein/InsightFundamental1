@@ -1,6 +1,7 @@
 import os
 import smtplib
 from email.message import EmailMessage
+import streamlit as st  # Wichtig: Wird nur zur Fehleranzeige verwendet
 
 EMAIL_HOST = os.getenv("EMAIL_HOST")
 EMAIL_PORT = int(os.getenv("EMAIL_PORT", 465))
@@ -8,7 +9,7 @@ EMAIL_ADDRESS = os.getenv("EMAIL_HOST_USER")
 EMAIL_PASSWORD = os.getenv("EMAIL_HOST_PASSWORD")
 
 def send_reset_email(to_email, token):
-    reset_link = f"https://insightfundamental.streamlit.app?view=reset_password&token={token}"
+    reset_link = f"https://your-app.streamlit.app?view=reset_password&token={token}"
 
     msg = EmailMessage()
     msg["Subject"] = "Password Reset – InsightFundamental"
@@ -33,5 +34,5 @@ InsightFundamental Team
             server.send_message(msg)
             return True
     except Exception as e:
-        print("Error sending email:", e)
+        st.error(f"Fehler beim Senden der E-Mail: {e}")  # 💥 Zeigt dir die genaue Ursache
         return False
