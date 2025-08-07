@@ -1183,7 +1183,6 @@ if view == "login":
     .stay-checkbox .stCheckbox span {
         color: #000000 !important;
     }
-    /* Comprehensive checkbox text targeting for login */
     .stay-checkbox *, .stay-checkbox label, .stay-checkbox span, .stay-checkbox div {
         color: #000000 !important;
     }
@@ -1192,43 +1191,60 @@ if view == "login":
     }
     </style>
     """, unsafe_allow_html=True)
-    
+
     cols = st.columns([2,1,2])
     with cols[1]:
         st.markdown('<div class="login-card">', unsafe_allow_html=True)
-        st.markdown(f'<h2>{get_text("login_title")}</h2>', unsafe_allow_html=True)
-        
-        email = st.text_input(get_text("email"), key="login_email")
-        pwd = st.text_input(get_text("password"), type="password", key="login_pwd")
+        st.markdown('<h2>Sign in to your account</h2>', unsafe_allow_html=True)
+
+        email = st.text_input("Email", key="login_email")
+        pwd = st.text_input("Password", type="password", key="login_pwd")
         st.markdown('<div class="stay-checkbox">', unsafe_allow_html=True)
-        keep_logged_in = st.checkbox(get_text("stay_logged_in"), key="keep_logged_in")
+        keep_logged_in = st.checkbox("Keep me signed in", key="keep_logged_in")
         st.markdown('</div>', unsafe_allow_html=True)
-        
-        if st.button(get_text("login_button")):
+
+        if st.button("Log in"):
             users = json.loads(USER_FILE.read_text())
             pw_hash = hashlib.sha256(pwd.encode()).hexdigest()
-            
-            # Check if user exists and password matches
+
             user_data = users.get(email)
+
             if user_data and isinstance(user_data, dict) and user_data.get("pwd") == pw_hash:
-                # Complex user object with pwd field
+                # Login successful
                 SESSION.logged_in = True
                 SESSION.username = email
-                SESSION.user_plan = "paid"
+
+                # Subscription check
+                subscription = user_data.get("subscription", {})
+                active = subscription.get("active", False)
+                end = subscription.get("end")
+
+                if active and end:
+                    try:
+                        end_date = datetime.strptime(end, "%Y-%m-%d").date()
+                        SESSION.subscription_active = end_date >= date.today()
+                    except Exception as e:
+                        SESSION.subscription_active = False
+                else:
+                    SESSION.subscription_active = False
+
                 redirect_to("news")
+
             elif user_data and not isinstance(user_data, dict) and user_data == pw_hash:
-                # Simple user object with just password hash
+                # Fallback for older user format
                 SESSION.logged_in = True
                 SESSION.username = email
-                SESSION.user_plan = "paid"
+                SESSION.subscription_active = False  # No subscription info
                 redirect_to("news")
+
             else:
-                st.error(get_text("invalid_credentials"))
-        
-        if st.button(get_text("forgot_password"), key="forgot_pwd_btn"):
+                st.error("Invalid email or password.")
+
+        if st.button("Forgot your password?", key="forgot_pwd_btn"):
             redirect_to("forgot_password")
-        
+
         st.markdown('</div>', unsafe_allow_html=True)
+    st.stop()
 
 # === Registration ===
 
@@ -1307,11 +1323,18 @@ if view == "register":
                 if email in users:
                     st.error("This email is already registered.")
                 else:
-                    users[email] = hashlib.sha256(pwd.encode()).hexdigest()
+                    users[email] = {
+                        "pwd": hashlib.sha256(pwd.encode()).hexdigest(),
+                        "subscription": {
+                            "active": False,
+                            "end": None
+                        }
+                    }
                     save_users(users)
+
                     SESSION.logged_in = True
                     SESSION.username = email
-                    SESSION.user_plan = "paid"
+                    SESSION.user_plan = "free"  # oder "paid", je nach Logik
 
                     st.success("Your account has been successfully created!")
 
