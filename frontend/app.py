@@ -12,7 +12,7 @@ import os
 from dotenv import load_dotenv
 load_dotenv()
 from email_utils import send_reset_email
-
+import hashlib
 
 # 👉 Navigations-Setup (einmalig zu Beginn der Datei):
 if "view" not in st.session_state:
@@ -304,7 +304,18 @@ if not USER_FILE.exists():
 
 SESSION = st.session_state
 
-# Initialize session state with proper defaults
+def load_users() -> dict:
+    try:
+        content = USER_FILE.read_text()
+        if not content.strip():
+            return {}
+        return json.loads(content)
+    except Exception:
+        return {}
+
+def save_users(users: dict):
+    USER_FILE.write_text(json.dumps(users, indent=4))
+
 def init_session_state():
     if "logged_in" not in SESSION:
         SESSION.logged_in = False
@@ -315,17 +326,7 @@ def init_session_state():
     if "language" not in SESSION:
         SESSION.language = "en"
 
-# Call initialization
 init_session_state()
-
-# Hilfsfunktionen
-
-def save_users(users: dict):
-    USER_FILE.write_text(json.dumps(users))
-
-def redirect_to(view: str):
-    st.query_params["view"] = view
-    st.rerun()
 
 # Placeholder functions for password reset (not implemented)
 def generate_reset_token(email: str) -> str:
@@ -1319,16 +1320,14 @@ if view == "register":
             elif pwd != pwd_confirm:
                 st.error("Passwords do not match.")
             else:
-                users = json.loads(USER_FILE.read_text())
+                users = load_users()  # sichere Funktion zum Laden der Nutzer
                 if email in users:
                     st.error("This email is already registered.")
                 else:
+                    import hashlib
                     users[email] = {
                         "pwd": hashlib.sha256(pwd.encode()).hexdigest(),
-                        "subscription": {
-                            "active": False,
-                            "end": None
-                        }
+                        "subscription_active": False
                     }
                     save_users(users)
 
