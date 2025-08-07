@@ -310,7 +310,8 @@ def load_users() -> dict:
         if not content.strip():
             return {}
         return json.loads(content)
-    except Exception:
+    except Exception as e:
+        print(f"[load_users] Fehler beim Laden der users.json: {e}")
         return {}
 
 def save_users(users: dict):
@@ -1309,7 +1310,7 @@ if view == "register":
         email = st.text_input("Email", key="reg_email")
         pwd = st.text_input("Password", type="password", key="reg_pwd")
         pwd_confirm = st.text_input("Confirm Password", type="password", key="reg_pwd_confirm")
-        
+
         st.markdown('<div class="terms-checkbox">', unsafe_allow_html=True)
         agb = st.checkbox("I accept the Terms and Conditions", key="reg_agb")
         st.markdown('</div>', unsafe_allow_html=True)
@@ -1320,11 +1321,10 @@ if view == "register":
             elif pwd != pwd_confirm:
                 st.error("Passwords do not match.")
             else:
-                users = load_users()  # sichere Funktion zum Laden der Nutzer
+                users = load_users()
                 if email in users:
                     st.error("This email is already registered.")
                 else:
-                    import hashlib
                     users[email] = {
                         "pwd": hashlib.sha256(pwd.encode()).hexdigest(),
                         "subscription_active": False
@@ -1333,11 +1333,10 @@ if view == "register":
 
                     SESSION.logged_in = True
                     SESSION.username = email
-                    SESSION.user_plan = "free"  # oder "paid", je nach Logik
+                    SESSION.user_plan = "free"
 
                     st.success("Your account has been successfully created!")
 
-                    # ✅ Stripe Checkout button
                     stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
                     st.markdown(
                         f"""
