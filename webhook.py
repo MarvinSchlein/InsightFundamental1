@@ -3,19 +3,18 @@ import json
 import os
 from flask import Flask, request
 
-import stripe
-
 app = Flask(__name__)
 
 USERS_FILE = "users.json"
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-stripe.api_key = os.getenv("STRIPE_API_KEY")
-
 
 @app.route("/webhook", methods=["POST"])
 def stripe_webhook():
     payload = request.data
     sig_header = request.headers.get("Stripe-Signature")
+
+    import stripe
+    stripe.api_key = os.getenv("STRIPE_API_KEY")
 
     try:
         event = stripe.Webhook.construct_event(
@@ -28,11 +27,8 @@ def stripe_webhook():
         session = event["data"]["object"]
         customer_email = session["customer_details"]["email"]
 
-        try:
-            with open(USERS_FILE, "r") as f:
-                users = json.load(f)
-        except FileNotFoundError:
-            users = {}
+        with open(USERS_FILE, "r") as f:
+            users = json.load(f)
 
         if customer_email in users:
             if isinstance(users[customer_email], dict):
@@ -52,6 +48,6 @@ def stripe_webhook():
 
     return "ok", 200
 
-
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 10000)))
+    port = int(os.environ.get("PORT", 10000))  # Render setzt PORT automatisch
+    app.run(host="0.0.0.0", port=port)
