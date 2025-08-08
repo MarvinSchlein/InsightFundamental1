@@ -1225,22 +1225,26 @@ if view == "login":
 
         email = st.text_input("Email", key="login_email")
         pwd = st.text_input("Password", type="password", key="login_pwd")
+
         st.markdown('<div class="stay-checkbox">', unsafe_allow_html=True)
         keep_logged_in = st.checkbox("Keep me signed in", key="keep_logged_in")
         st.markdown('</div>', unsafe_allow_html=True)
 
-        if st.button("Log in"):
-            users = json.loads(USER_FILE.read_text())
+        login_clicked = st.button("Log in")
+
+        forgot_clicked = st.button("Forgot your password?", key="forgot_pwd_btn")
+
+        if login_clicked:
+            users = load_users()
             pw_hash = hashlib.sha256(pwd.encode()).hexdigest()
 
             user_data = users.get(email)
 
             if user_data and isinstance(user_data, dict) and user_data.get("pwd") == pw_hash:
-                # Login successful
+                # Login erfolgreich
                 SESSION.logged_in = True
                 SESSION.username = email
 
-                # Subscription check
                 subscription = user_data.get("subscription", {})
                 active = subscription.get("active", False)
                 end = subscription.get("end")
@@ -1249,7 +1253,7 @@ if view == "login":
                     try:
                         end_date = datetime.strptime(end, "%Y-%m-%d").date()
                         SESSION.subscription_active = end_date >= date.today()
-                    except Exception as e:
+                    except Exception:
                         SESSION.subscription_active = False
                 else:
                     SESSION.subscription_active = False
@@ -1257,19 +1261,19 @@ if view == "login":
                 redirect_to("news")
 
             elif user_data and not isinstance(user_data, dict) and user_data == pw_hash:
-                # Fallback for older user format
+                # Fallback für ältere User-Formate
                 SESSION.logged_in = True
                 SESSION.username = email
-                SESSION.subscription_active = False  # No subscription info
+                SESSION.subscription_active = False
                 redirect_to("news")
-
             else:
                 st.error("Invalid email or password.")
 
-        if st.button("Forgot your password?", key="forgot_pwd_btn"):
+        if forgot_clicked:
             redirect_to("forgot_password")
 
         st.markdown('</div>', unsafe_allow_html=True)
+
     st.stop()
 
 # === Registration ===
@@ -1345,6 +1349,7 @@ if view == "register":
             elif pwd != pwd_confirm:
                 st.error("Passwords do not match.")
             else:
+                # ✅ load_users() sollte an anderer Stelle definiert sein!
                 users = load_users()
 
                 if email in users:
@@ -1354,6 +1359,8 @@ if view == "register":
                         "pwd": hashlib.sha256(pwd.encode()).hexdigest(),
                         "subscription_active": False
                     }
+
+                    # ✅ save_users() speichert nach users.json
                     save_users(users)
 
                     SESSION.logged_in = True
@@ -1362,7 +1369,7 @@ if view == "register":
 
                     st.success("Your account has been successfully created!")
 
-                    # Stripe Button
+                    # ✅ Stripe Button
                     stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
                     st.markdown(
                         f"""
@@ -1377,6 +1384,8 @@ if view == "register":
                         unsafe_allow_html=True
                     )
                     st.stop()
+
+        st.markdown('</div>', unsafe_allow_html=True)
 
 # === Stripe-Testphase-Platzhalterseite ===
 
