@@ -35,7 +35,7 @@ def load_users() -> dict:
         return {}
 
 def save_users(users: dict):
-    USER_FILE.write_text(json.dumps(users, indent=2))
+    USER_FILE.write_text(json.dumps(users, indent=4))
 
 
 # 👉 Navigations-Setup (einmalig zu Beginn der Datei):
@@ -320,10 +320,11 @@ def get_text(key: str) -> str:
     return TEXTS.get(lang, TEXTS["en"]).get(key, key)
 
 # === Session & Nutzerverwaltung ===
-
 USER_FILE = Path("data/users.json")
 USER_FILE.parent.mkdir(exist_ok=True, parents=True)
-if not USER_FILE.exists():
+
+# Wenn Datei nicht existiert oder leer ist → leeres JSON schreiben
+if not USER_FILE.exists() or not USER_FILE.read_text().strip():
     USER_FILE.write_text(json.dumps({}))
 
 SESSION = st.session_state
@@ -1359,8 +1360,6 @@ if view == "register":
                         "pwd": hashlib.sha256(pwd.encode()).hexdigest(),
                         "subscription_active": False
                     }
-
-                    # ✅ save_users() speichert nach users.json
                     save_users(users)
 
                     SESSION.logged_in = True
