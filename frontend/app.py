@@ -24,15 +24,20 @@ if not USER_FILE.exists():
 # === Nutzer laden / speichern ===
 def load_users() -> dict:
     try:
-        content = USER_FILE.read_text()
-        if not content.strip():
+        if USER_FILE.exists() and USER_FILE.read_text().strip():
+            return json.loads(USER_FILE.read_text())
+        else:
             return {}
-        return json.loads(content)
-    except json.JSONDecodeError:
-        return {}
     except Exception as e:
-        print(f"Error loading users: {e}")
+        st.error(f"Fehler beim Laden der Nutzerdaten: {e}")
         return {}
+
+def save_users(users: dict):
+    try:
+        USER_FILE.write_text(json.dumps(users, indent=4))
+    except Exception as e:
+        st.error(f"Fehler beim Speichern der Nutzerdaten: {e}")
+    
 
 def save_users(users: dict):
     USER_FILE.write_text(json.dumps(users, indent=4))
@@ -331,13 +336,19 @@ SESSION = st.session_state
 
 def load_users() -> dict:
     try:
-        content = USER_FILE.read_text()
-        if not content.strip():
+        if USER_FILE.exists() and USER_FILE.read_text().strip():
+            return json.loads(USER_FILE.read_text())
+        else:
             return {}
-        return json.loads(content)
     except Exception as e:
-        print(f"[load_users] Fehler beim Laden der users.json: {e}")
+        st.error(f"Fehler beim Laden der Nutzerdaten: {e}")
         return {}
+
+def save_users(users: dict):
+    try:
+        USER_FILE.write_text(json.dumps(users, indent=4))
+    except Exception as e:
+        st.error(f"Fehler beim Speichern der Nutzerdaten: {e}")
 
 def save_users(users: dict):
     USER_FILE.write_text(json.dumps(users, indent=4))
@@ -1278,6 +1289,13 @@ if view == "login":
     st.stop()
 
 # === Registration ===
+
+st.markdown("---")
+st.markdown("### Debug: Inhalt von users.json")
+try:
+    st.code(USER_FILE.read_text())
+except Exception as e:
+    st.error(f"Fehler beim Lesen von users.json: {e}")
 
 if view == "register":
     st.markdown("""
