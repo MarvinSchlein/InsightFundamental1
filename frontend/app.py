@@ -14,6 +14,30 @@ load_dotenv()
 from email_utils import send_reset_email
 import hashlib
 
+
+# === Datei-Pfad definieren ===
+USER_FILE = Path("data/users.json")
+USER_FILE.parent.mkdir(parents=True, exist_ok=True)
+if not USER_FILE.exists():
+    USER_FILE.write_text(json.dumps({}))  # leeres JSON schreiben
+
+# === Nutzer laden / speichern ===
+def load_users() -> dict:
+    try:
+        content = USER_FILE.read_text()
+        if not content.strip():
+            return {}
+        return json.loads(content)
+    except json.JSONDecodeError:
+        return {}
+    except Exception as e:
+        print(f"Error loading users: {e}")
+        return {}
+
+def save_users(users: dict):
+    USER_FILE.write_text(json.dumps(users, indent=2))
+
+
 # 👉 Navigations-Setup (einmalig zu Beginn der Datei):
 if "view" not in st.session_state:
     st.session_state["view"] = "landing"
@@ -1322,6 +1346,7 @@ if view == "register":
                 st.error("Passwords do not match.")
             else:
                 users = load_users()
+
                 if email in users:
                     st.error("This email is already registered.")
                 else:
@@ -1337,6 +1362,7 @@ if view == "register":
 
                     st.success("Your account has been successfully created!")
 
+                    # Stripe Button
                     stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
                     st.markdown(
                         f"""
@@ -1351,8 +1377,6 @@ if view == "register":
                         unsafe_allow_html=True
                     )
                     st.stop()
-
-        st.markdown('</div>', unsafe_allow_html=True)
 
 # === Stripe-Testphase-Platzhalterseite ===
 
