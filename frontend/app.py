@@ -20,6 +20,14 @@ SUPABASE_URL = "https://hpjprbhavtewgpbjwdic.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwanByYmhhdnRld2dwYmp3ZGljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NTMyMzcsImV4cCI6MjA3MDIyOTIzN30.9Dk0YhonY5nT80UdRo6VtQ76jfSOXEavmjMH_FwaMvw"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+def insert_user_to_supabase(email, password_hash):
+    data = {
+        "email": email,
+        "pwd": password_hash,
+        "subscription_active": False
+    }
+    supabase.table("users").insert(data).execute()
+
 
 # === Datei-Pfad definieren ===
 USER_FILE = Path("data/users.json")
@@ -1287,12 +1295,11 @@ if view == "login":
 # === Registration ===
 
 st.markdown("---")
-st.markdown("### Debug: Supabase-Verbindung testen")
+st.markdown("### Debug: Inhalt von users.json")
 try:
-    result = supabase.table("users").select("*").limit(1).execute()
-    st.success("Supabase-Verbindung erfolgreich.")
+    st.code(USER_FILE.read_text())
 except Exception as e:
-    st.error(f"Fehler bei Verbindung zu Supabase: {e}")
+    st.error(f"Fehler beim Lesen von users.json: {e}")
 
 if view == "register":
     st.markdown("""
@@ -1365,47 +1372,43 @@ if view == "register":
             elif pwd != pwd_confirm:
                 st.error("Passwords do not match.")
             else:
-                # Supabase Registrierung
-                hashed_pwd = hashlib.sha256(pwd.encode()).hexdigest()
-                try:
-                    # Prüfen, ob Nutzer schon existiert
-                    result = supabase.table("users").select("email").eq("email", email).execute()
-                    if result.data:
-                        st.error("This email is already registered.")
-                    else:
-                        response = supabase.table("users").insert({
-                            "email": email,
-                            "password": hashed_pwd,
-                            "subscription_active": False
-                        }).execute()
+                users = load_users()
+                if email in users:
+                    st.error("This email is already registered.")
+                else:
+                    pwd_hash = hashlib.sha256(pwd.encode()).hexdigest()
 
-                        if response.status_code == 201:
-                            SESSION.logged_in = True
-                            SESSION.username = email
-                            SESSION.user_plan = "free"
+                    users[email] = {
+                        "pwd": pwd_hash,
+                        "subscription_active": False
+                    }
+                    save_users(users)
 
-                            st.success("Your account has been successfully created!")
+                    # ✅ Supabase: Speichere den Nutzer dort
+                    insert_user_to_supabase(email, pwd_hash)
 
-                            # Stripe Button anzeigen
-                            stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
-                            st.markdown(
-                                f"""
-                                <div style='margin-top: 1.5rem; text-align: center;'>
-                                    <a href="{stripe_url}" target="_blank">
-                                        <button style='padding: 0.6em 1.2em; font-size: 1.1em; border-radius: 8px; background-color: #635bff; color: white; border: none; cursor: pointer;'>
-                                            Start 14-day free trial now!
-                                        </button>
-                                    </a>
-                                </div>
-                                """,
-                                unsafe_allow_html=True
-                            )
-                            st.stop()
-                        else:
-                            st.error("Registration failed. Please try again.")
+                    # ✅ Session setzen
+                    SESSION.logged_in = True
+                    SESSION.username = email
+                    SESSION.user_plan = "free"
 
-                except Exception as e:
-                    st.error(f"Registration error: {e}")
+                    st.success("Your account has been successfully created!")
+
+                    # ✅ Stripe Button
+                    stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
+                    st.markdown(
+                        f"""
+                        <div style='margin-top: 1.5rem; text-align: center;'>
+                            <a href="{stripe_url}" target="_blank">
+                                <button style='padding: 0.6em 1.2em; font-size: 1.1em; border-radius: 8px; background-color: #635bff; color: white; border: none; cursor: pointer;'>
+                                    Start 14-day free trial now!
+                                </button>
+                            </a>
+                        </div>
+                        """,
+                        unsafe_allow_html=True
+                    )
+                    st.stop()
 
         st.markdown('</div>', unsafe_allow_html=True)
 
