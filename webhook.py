@@ -1,53 +1,48 @@
-# webhook.py
-import json
 import os
-from flask import Flask, request
+import stripe
+from flask import Flask, request, jsonify
+from supabase import create_client
+
+# ==== Stripe Setup ====
+stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
+endpoint_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
+
+# ==== Supabase Setup ====
+supabase_url = os.getenv("SUPABASE_URL")
+supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # Service Role Key nötig für Updates
+supabase = create_client(supabase_url, supabase_key)
 
 app = Flask(__name__)
 
-USERS_FILE = "users.json"
-STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
-
-@app.route("/webhook", methods=["POST"])
+@app.route("/stripe-webhook", methods=["POST"])
 def stripe_webhook():
     payload = request.data
     sig_header = request.headers.get("Stripe-Signature")
 
-    import stripe
-    stripe.api_key = os.getenv("STRIPE_API_KEY")
-
     try:
         event = stripe.Webhook.construct_event(
-            payload, sig_header, STRIPE_WEBHOOK_SECRET
+            payload, sig_header, endpoint_secret
         )
-    except Exception as e:
-        return f"Webhook error: {e}", 400
+    except stripe.error.SignatureVerificationError:
+        return "Invalid signature", 400
 
+    # === Event Handling ===
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-        customer_email = session["customer_details"]["email"]
+        customer_email = session.get("customer_email")
+        if customer_email:
+            supabase.table("users").update({"subscription_active": True}).eq("email", customer_email).execute()
 
-        with open(USERS_FILE, "r") as f:
-            users = json.load(f)
+    elif event["type"] == "customer.subscription.deleted":
+        subscription = event["data"]["object"]
+        customer_id = subscription.get("customer")
+        # Email aus Stripe-API abrufen
+        customer = stripe.Customer.retrieve(customer_id)
+        email = customer.get("email")
+        if email:
+            supabase.table("users").update({"subscription_active": False}).eq("email", email).execute()
 
-        if customer_email in users:
-            if isinstance(users[customer_email], dict):
-                users[customer_email]["subscription_active"] = True
-            else:
-                users[customer_email] = {
-                    "pwd": users[customer_email],
-                    "subscription_active": True,
-                }
-
-            with open(USERS_FILE, "w") as f:
-                json.dump(users, f, indent=4)
-
-            print(f"✅ Subscription activated for {customer_email}")
-        else:
-            print(f"⚠️ User {customer_email} not found in users.json")
-
-    return "ok", 200
+    return jsonify({"status": "success"})
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))  # Render setzt PORT automatisch
-    app.run(host="0.0.0.0", port=port)
+    app.run(port=4242)
