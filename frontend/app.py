@@ -20,10 +20,10 @@ SUPABASE_URL = "https://hpjprbhavtewgpbjwdic.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwanByYmhhdnRld2dwYmp3ZGljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NTMyMzcsImV4cCI6MjA3MDIyOTIzN30.9Dk0YhonY5nT80UdRo6VtQ76jfSOXEavmjMH_FwaMvw"
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-def insert_user_to_supabase(email, password_hash):
+def insert_user_to_supabase(email, pwd_hash):
     data = {
         "email": email,
-        "pwd": password_hash,
+        "password": pwd_hash,  # Spaltenname muss mit Supabase übereinstimmen
         "subscription_active": False
     }
     supabase.table("users").insert(data).execute()
