@@ -1,7 +1,7 @@
 import os
+from flask import Flask, request
 import stripe
-from flask import Flask, request, jsonify
-from supabase import create_client
+from supabase import create_client, Client
 
 # ==== Stripe Setup ====
 stripe.api_key = os.getenv("STRIPE_SECRET_KEY")
