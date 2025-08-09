@@ -23,10 +23,10 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 def insert_user_to_supabase(email, pwd_hash):
     data = {
         "email": email,
-        "password": pwd_hash,  # Spaltenname muss mit Supabase übereinstimmen
+        "password": pwd_hash,
         "subscription_active": False
     }
-    supabase.table("users").insert(data).execute()
+    supabase.table("users").insert([data]).execute()  # <-- WICHTIG: [data]
 
 
 # === Datei-Pfad definieren ===
@@ -1293,14 +1293,6 @@ if view == "login":
     st.stop()
 
 # === Registration ===
-
-st.markdown("---")
-st.markdown("### Debug: Inhalt von users.json")
-try:
-    st.code(USER_FILE.read_text())
-except Exception as e:
-    st.error(f"Fehler beim Lesen von users.json: {e}")
-
 if view == "register":
     st.markdown("""
     <style>
@@ -1323,15 +1315,8 @@ if view == "register":
         margin-bottom:1.2em;
         text-align:center;
     }
-    .register-card .stTextInput, .register-card .stTextInput>div, .register-card .stTextInput>div>div {
-        width: 120px !important;
-        max-width: 120px !important;
-        min-width: 60px !important;
-    }
     .register-card .stTextInput>div>div>input {
         width: 120px !important;
-        max-width: 120px !important;
-        min-width: 60px !important;
     }
     .register-card .stButton>button {
         width:100%;
@@ -1340,14 +1325,7 @@ if view == "register":
         border-radius:8px;
         margin-top:1.2em;
     }
-    .register-card label, .register-card .stCheckbox {
-        width:100%;
-        text-align:left;
-    }
-    .register-card .stCheckbox span {
-        color: #000000 !important;
-    }
-    .terms-checkbox *, .terms-checkbox label, .terms-checkbox span, .terms-checkbox div {
+    .terms-checkbox * {
         color: #000000 !important;
     }
     </style>
@@ -1372,43 +1350,50 @@ if view == "register":
             elif pwd != pwd_confirm:
                 st.error("Passwords do not match.")
             else:
-                users = load_users()
-                if email in users:
-                    st.error("This email is already registered.")
-                else:
-                    pwd_hash = hashlib.sha256(pwd.encode()).hexdigest()
+                try:
+                    # Prüfen, ob E-Mail schon existiert
+                    existing_user = supabase.table("users").select("*").eq("email", email).execute()
+                    if existing_user.data and len(existing_user.data) > 0:
+                        st.error("This email is already registered.")
+                    else:
+                        # Passwort-Hash
+                        pwd_hash = hashlib.sha256(pwd.encode()).hexdigest()
 
-                    users[email] = {
-                        "pwd": pwd_hash,
-                        "subscription_active": False
-                    }
-                    save_users(users)
+                        # Nutzer in Supabase speichern (mit [data] Fix)
+                        data = {
+                            "email": email,
+                            "pwd": pwd_hash,
+                            "subscription_active": False
+                        }
+                        result = supabase.table("users").insert([data]).execute()
 
-                    # ✅ Supabase: Speichere den Nutzer dort
-                    insert_user_to_supabase(email, pwd_hash)
+                        if result.data:
+                            SESSION.logged_in = True
+                            SESSION.username = email
+                            SESSION.user_plan = "free"
 
-                    # ✅ Session setzen
-                    SESSION.logged_in = True
-                    SESSION.username = email
-                    SESSION.user_plan = "free"
+                            st.success("Your account has been successfully created!")
 
-                    st.success("Your account has been successfully created!")
+                            # Stripe Button anzeigen
+                            stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
+                            st.markdown(
+                                f"""
+                                <div style='margin-top: 1.5rem; text-align: center;'>
+                                    <a href="{stripe_url}" target="_blank">
+                                        <button style='padding: 0.6em 1.2em; font-size: 1.1em; border-radius: 8px; background-color: #635bff; color: white; border: none; cursor: pointer;'>
+                                            Start 14-day free trial now!
+                                        </button>
+                                    </a>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+                            st.stop()
+                        else:
+                            st.error("Unknown error: User could not be inserted into Supabase.")
 
-                    # ✅ Stripe Button
-                    stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
-                    st.markdown(
-                        f"""
-                        <div style='margin-top: 1.5rem; text-align: center;'>
-                            <a href="{stripe_url}" target="_blank">
-                                <button style='padding: 0.6em 1.2em; font-size: 1.1em; border-radius: 8px; background-color: #635bff; color: white; border: none; cursor: pointer;'>
-                                    Start 14-day free trial now!
-                                </button>
-                            </a>
-                        </div>
-                        """,
-                        unsafe_allow_html=True
-                    )
-                    st.stop()
+                except Exception as e:
+                    st.error(f"Registration failed: {e}")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
