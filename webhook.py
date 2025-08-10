@@ -9,7 +9,7 @@ endpoint_secret = os.getenv("STRIPE_WEBHOOK_SECRET")
 
 # ==== Supabase Setup ====
 supabase_url = os.getenv("SUPABASE_URL")
-supabase_key = os.getenv("SUPABASE_KEY")  # Service Role Key nötig für Updates
+supabase_service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")  # Service Role Key nötig für Updates
 supabase = create_client(supabase_url, supabase_key)
 
 app = Flask(__name__)
