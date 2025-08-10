@@ -14,7 +14,7 @@ supabase = create_client(supabase_url, supabase_key)
 
 app = Flask(__name__)
 
-@app.route("/stripe-webhook", methods=["POST"])
+@app.route("/webhook", methods=["POST"])
 def stripe_webhook():
     payload = request.data
     sig_header = request.headers.get("Stripe-Signature")
