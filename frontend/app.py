@@ -1622,12 +1622,24 @@ def translate_text(text, target_lang):
         return text
 
 # === News-Startseite (nur für zahlende Nutzer) ===
-
 if view in ["news", "Alle Nachrichten"]:
     # Zugriff nur für eingeloggte und zahlende Nutzer
     if not SESSION.logged_in or SESSION.user_plan != "paid":
         st.warning("Access denied. You must start the free trial to access the News Analysis.")
-        st.markdown('<a href="/?view=register">Go to registration</a>', unsafe_allow_html=True)
+        
+        stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"  # Dein Stripe-Link
+        st.markdown(
+            f"""
+            <div style='margin-top: 1.5rem; text-align: center;'>
+                <a href="{stripe_url}" target="_blank">
+                    <button style='padding: 0.6em 1.2em; font-size: 1.1em; border-radius: 8px; background-color: #635bff; color: white; border: none; cursor: pointer;'>
+                        Start 14-day free Trial to get access
+                    </button>
+                </a>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         st.stop()
 
     st.markdown("<style>.block-container {padding-top: 0.5rem !important;}</style>", unsafe_allow_html=True)
