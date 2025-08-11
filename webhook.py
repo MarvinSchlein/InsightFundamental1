@@ -1,73 +1,98 @@
 import os
-import json
-from flask import Flask, request
-from supabase import create_client, Client
 import stripe
+from flask import Flask, request, jsonify
+from supabase import create_client, Client
 
-# === Flask App ===
+# --------------------
+# Environment Variables
+# --------------------
+STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY")
+STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")  # Service Role Key!
+
+if not STRIPE_API_KEY or not STRIPE_WEBHOOK_SECRET:
+    raise ValueError("Stripe API Key oder Webhook Secret fehlen in Environment Variables.")
+if not SUPABASE_URL or not SUPABASE_KEY:
+    raise ValueError("Supabase URL oder Service Role Key fehlen in Environment Variables.")
+
+# --------------------
+# Initialize Clients
+# --------------------
+stripe.api_key = STRIPE_API_KEY
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 app = Flask(__name__)
 
-# === Keys ===
-stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
-endpoint_secret = os.environ.get("STRIPE_WEBHOOK_SECRET")
-supabase_url = os.environ.get("SUPABASE_URL")
-supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-stripe.api_key = STRIPE_SECRET
-
+# --------------------
+# Stripe Webhook Route
+# --------------------
 @app.route("/webhook", methods=["POST"])
 def stripe_webhook():
     payload = request.data
     sig_header = request.headers.get("Stripe-Signature")
 
-    # Verifiziere Webhook-Signatur
+    # Event verifizieren
     try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, STRIPE_WEBHOOK_SECRET
-        )
-    except ValueError as e:
-        print("❌ Invalid payload:", e)
-        return "Bad request", 400
+        event = stripe.Webhook.construct_event(payload, sig_header, STRIPE_WEBHOOK_SECRET)
+        print(f"✅ Webhook Event empfangen: {event['type']}")
     except stripe.error.SignatureVerificationError as e:
-        print("❌ Invalid signature:", e)
-        return "Unauthorized", 400
-
-    print("✅ Event received:", event["type"])
-
-    # === Logging der Daten ===
-    try:
-        print("📦 Event data object:", json.dumps(event["data"]["object"], indent=2))
+        print("❌ Webhook Signature Verification failed:", e)
+        return jsonify(success=False), 400
     except Exception as e:
-        print("⚠️ Could not pretty print event data:", e)
+        print("❌ Fehler beim Verarbeiten des Webhooks:", e)
+        return jsonify(success=False), 400
 
-    # === Handling checkout.session.completed ===
+    # --------------------
+    # Spezifische Events
+    # --------------------
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
         customer_email = session.get("customer_details", {}).get("email")
+        subscription_id = session.get("subscription")
 
-        if not customer_email:
-            print("⚠️ No customer email found in session")
-            return "No email", 200
+        print(f"ℹ️ Checkout abgeschlossen für {customer_email}, Sub-ID: {subscription_id}")
 
-        print(f"🔍 Searching Supabase user with email: {customer_email}")
+        if customer_email and subscription_id:
+            try:
+                response = (
+                    supabase.table("users")
+                    .update({"subscription_status": "active"})
+                    .eq("email", customer_email)
+                    .execute()
+                )
+                print("✅ Supabase Update Response:", response)
+            except Exception as e:
+                print("❌ Fehler beim Supabase Update:", e)
 
-        # Update in Supabase
-        try:
-            result = supabase.table("users").update(
-                {"subscription_active": True}
-            ).eq("email", customer_email).execute()
+    elif event["type"] == "customer.subscription.deleted":
+        subscription = event["data"]["object"]
+        customer_id = subscription.get("customer")
 
-            if result.data:
-                print(f"✅ Subscription activated for {customer_email}")
-            else:
-                print(f"⚠️ No user found with email {customer_email}")
+        print(f"ℹ️ Subscription gelöscht, Customer-ID: {customer_id}")
 
-        except Exception as e:
-            print("❌ Error updating Supabase:", e)
-            return "DB error", 500
+        if customer_id:
+            try:
+                # Customer E-Mail über Stripe abfragen
+                customer = stripe.Customer.retrieve(customer_id)
+                customer_email = customer.get("email")
 
-    return "OK", 200
+                if customer_email:
+                    response = (
+                        supabase.table("users")
+                        .update({"subscription_status": "canceled"})
+                        .eq("email", customer_email)
+                        .execute()
+                    )
+                    print("✅ Supabase Update Response:", response)
+            except Exception as e:
+                print("❌ Fehler beim Subscription-Cancel-Update:", e)
 
+    return jsonify(success=True)
+
+# --------------------
+# Local / Render Server
+# --------------------
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=10000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)
