@@ -5,11 +5,11 @@ import stripe
 from flask import Flask, request, jsonify
 from supabase import create_client, Client
 
-# ---------- Logging sauber aktivieren ----------
+# ---------- Logging ----------
 logging.basicConfig(level=logging.INFO, force=True)
 log = logging.getLogger("webhook")
 
-# ---------- ENV laden (genau so wie auf Render gesetzt) ----------
+# ---------- ENV ----------
 STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
@@ -25,28 +25,40 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 app = Flask(__name__)
 
-# ---------- Helper: robustes Update ----------
-def set_subscription_active_by_email(email: str) -> dict:
+# ---------- Helpers ----------
+def normalize_email(email: str | None) -> str | None:
+    if not email:
+        return None
+    return email.strip().lower()
+
+def get_email_from_customer_id(customer_id: str | None) -> str | None:
+    if not customer_id:
+        return None
+    try:
+        cust = stripe.Customer.retrieve(customer_id)
+        return normalize_email(cust.get("email"))
+    except Exception as e:
+        log.warning("⚠️ could not retrieve customer %s: %s", customer_id, e)
+        return None
+
+def supabase_set_subscription(email: str, active: bool) -> dict:
     """
-    Setzt subscription_active=True für die gegebene E-Mail.
-    Versucht: exact match -> ILIKE -> Upsert (falls User nicht existiert).
-    Gibt die Supabase-Antwort zurück (für Logs).
+    Setzt subscription_active für email.
+    Versucht exact match -> ILIKE -> Upsert (falls User noch nicht existiert).
     """
-    # 1) exact match (lowercase-normalisiert)
-    resp = supabase.table("users").update({"subscription_active": True}) \
-        .eq("email", email).execute()
+    # 1) exact match
+    resp = supabase.table("users").update({"subscription_active": active}).eq("email", email).execute()
     if resp.data:
         return {"mode": "eq", "data": resp.data}
 
-    # 2) case-insensitive fallback
-    resp2 = supabase.table("users").update({"subscription_active": True}) \
-        .ilike("email", email).execute()
+    # 2) case-insensitive
+    resp2 = supabase.table("users").update({"subscription_active": active}).ilike("email", email).execute()
     if resp2.data:
         return {"mode": "ilike", "data": resp2.data}
 
-    # 3) optional: upsert (nur wenn du willst, dass Checkout auch ohne Registrierung greift)
+    # 3) upsert (falls Checkout vor Registration passiert ist)
     upsert = supabase.table("users").upsert(
-        {"email": email, "subscription_active": True},
+        {"email": email, "subscription_active": active},
         on_conflict="email"
     ).execute()
     return {"mode": "upsert", "data": upsert.data}
@@ -70,30 +82,82 @@ def stripe_webhook():
     etype = event.get("type")
     log.info("✅ Event: %s", etype)
 
-    # Nur auf checkout.session.completed reagieren
+    # ========== checkout.session.completed ==========
     if etype == "checkout.session.completed":
         session = event["data"]["object"]
+        # In deinen Events ist customer_email oft null → customer_details.email verwenden
+        email = normalize_email((session.get("customer_details") or {}).get("email"))
+        if not email:
+            # Fallback via customer_id
+            email = get_email_from_customer_id(session.get("customer"))
 
-        # Wichtiger Punkt: customer_email ist bei dir NULL; nimm customer_details.email
-        customer_email = (session.get("customer_details") or {}).get("email")
-        if not customer_email:
-            log.warning("⚠️ No customer email in session: %s", json.dumps(session))
-            return jsonify(ok=True)  # 200 zurückgeben, damit Stripe nicht spammt
-
-        email_norm = customer_email.strip().lower()
-        log.info("📧 Will update Supabase for email: %s", email_norm)
+        if not email:
+            log.warning("⚠️ No email resolvable in checkout.session.completed: %s", json.dumps(session))
+            return jsonify(ok=True), 200
 
         try:
-            result = set_subscription_active_by_email(email_norm)
-            log.info("📦 Supabase update result (%s): %s", result.get("mode"), result.get("data"))
+            result = supabase_set_subscription(email, True)
+            log.info("📦 Supabase update result (checkout, %s): %s", result.get("mode"), result.get("data"))
         except Exception as e:
-            log.error("❌ Supabase update error: %s", e, exc_info=True)
-            # 200 zurückgeben, damit Stripe nicht ständig retryt – aber Fehler loggen
+            log.error("❌ Supabase update error (checkout): %s", e, exc_info=True)
             return jsonify(ok=True), 200
+
+    # ========== customer.subscription.created / updated ==========
+    elif etype in ("customer.subscription.created", "customer.subscription.updated"):
+        sub = event["data"]["object"]
+        status = (sub.get("status") or "").lower()  # active, trialing, past_due, canceled, unpaid, incomplete, ...
+        customer_id = sub.get("customer")
+        email = get_email_from_customer_id(customer_id)
+
+        if not email:
+            log.warning("⚠️ No email resolvable in %s", etype)
+            return jsonify(ok=True), 200
+
+        make_active = status in ("active", "trialing")
+        try:
+            result = supabase_set_subscription(email, make_active)
+            log.info("🔁 Subscription status=%s -> subscription_active=%s (%s): %s",
+                     status, make_active, result.get("mode"), result.get("data"))
+        except Exception as e:
+            log.error("❌ Supabase update error (subscription.%s): %s", status, e, exc_info=True)
+
+    # ========== customer.subscription.deleted ==========
+    elif etype == "customer.subscription.deleted":
+        sub = event["data"]["object"]
+        email = get_email_from_customer_id(sub.get("customer"))
+        if email:
+            try:
+                result = supabase_set_subscription(email, False)
+                log.info("🔻 Deactivated after cancellation (%s): %s", result.get("mode"), result.get("data"))
+            except Exception as e:
+                log.error("❌ Supabase update error (subscription.deleted): %s", e, exc_info=True)
+
+    # ========== invoice.payment_failed ==========
+    elif etype == "invoice.payment_failed":
+        inv = event["data"]["object"]
+        email = get_email_from_customer_id(inv.get("customer"))
+        if email:
+            try:
+                result = supabase_set_subscription(email, False)
+                log.info("🔻 Deactivated after payment failure (%s): %s", result.get("mode"), result.get("data"))
+            except Exception as e:
+                log.error("❌ Supabase update error (payment_failed): %s", e, exc_info=True)
+
+    # ========== invoice.payment_succeeded ==========
+    elif etype == "invoice.payment_succeeded":
+        inv = event["data"]["object"]
+        email = get_email_from_customer_id(inv.get("customer"))
+        if email:
+            try:
+                result = supabase_set_subscription(email, True)
+                log.info("✅ Activated after payment succeeded (%s): %s", result.get("mode"), result.get("data"))
+            except Exception as e:
+                log.error("❌ Supabase update error (payment_succeeded): %s", e, exc_info=True)
 
     return jsonify(ok=True), 200
 
 # ---------- Serverstart ----------
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    # Render setzt PORT; fallback auf 10000, weil dein Service darauf lief
+    port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
