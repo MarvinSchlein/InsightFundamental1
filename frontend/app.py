@@ -1658,26 +1658,63 @@ def translate_text(text, target_lang):
 
 # === News-Startseite (nur für zahlende Nutzer) ===
 if view in ["news", "Alle Nachrichten"]:
-    # Zugriff nur für eingeloggte und zahlende Nutzer
-    if not SESSION.logged_in or SESSION.user_plan != "paid":
-        st.warning("Access denied. You must start the free trial to access the News Analysis.")
-        
-        stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"  # Dein Stripe-Link
-        st.markdown(
-            f"""
-            <div style='margin-top: 1.5rem; text-align: center;'>
+    # 1) Nur eingeloggte Nutzer
+    if not SESSION.get("logged_in"):
+        st.warning("Please sign in to continue.")
+        redirect_to("login")
+        st.stop()
+
+    # 2) Abo-Status beim Betreten live aus Supabase nachladen
+    try:
+        if supabase is not None:
+            res = supabase.table("users") \
+                .select("subscription_active") \
+                .eq("email", (SESSION.username or "").lower()) \
+                .execute()
+            if res.data:
+                SESSION.subscription_active = bool(res.data[0].get("subscription_active", False))
+                SESSION.user_plan = "paid" if SESSION.subscription_active else "free"
+    except Exception as e:
+        # Nicht blockieren – nur Info anzeigen
+        st.info(f"Could not refresh access right now. ({e})")
+
+    # 3) Falls kein aktives Abo: CTA + Refresh zeigen und stoppen
+    if not SESSION.get("subscription_active", False):
+        st.warning("Access denied. Start the free trial to access the News Analysis.")
+
+        stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
+        col1, col2 = st.columns([1, 1])
+        with col1:
+            st.markdown(
+                f"""
                 <a href="{stripe_url}" target="_blank">
-                    <button style='padding: 0.6em 1.2em; font-size: 1.1em; border-radius: 8px; background-color: #635bff; color: white; border: none; cursor: pointer;'>
+                    <button style='padding:0.6em 1.2em;font-size:1.05em;border-radius:8px;background:#635bff;color:#fff;border:none;cursor:pointer;'>
                         Start 14-day free Trial to get access
                     </button>
                 </a>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+                """,
+                unsafe_allow_html=True
+            )
+        with col2:
+            if st.button("Refresh access"):
+                try:
+                    if supabase is not None:
+                        res = supabase.table("users") \
+                            .select("subscription_active") \
+                            .eq("email", (SESSION.username or "").lower()) \
+                            .execute()
+                        if res.data:
+                            SESSION.subscription_active = bool(res.data[0].get("subscription_active", False))
+                            SESSION.user_plan = "paid" if SESSION.subscription_active else "free"
+                            st.rerun()
+                except Exception as e:
+                    st.error(f"Refresh failed: {e}")
+
         st.stop()
 
+    # 4) Ab hier: zahlender Nutzer → News rendern
     st.markdown("<style>.block-container {padding-top: 0.5rem !important;}</style>", unsafe_allow_html=True)
+    # ... dein bestehender News-Content ...
 
     # --- Linke Spalte: Dashboard ---
     left_col, mid_col = st.columns([1,2])
