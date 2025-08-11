@@ -1282,27 +1282,40 @@ if view == "login":
         forgot_clicked = st.button("Forgot your password?", key="forgot_pwd_btn")
 
         if login_clicked:
-            pw_hash = hashlib.sha256(pwd.encode()).hexdigest()
+            # Supabase-Client vorhanden?
+            if supabase is None:
+                st.error("Supabase client not configured. Please set SUPABASE_URL and SUPABASE_ANON_KEY.")
+                st.stop()
+
+            email_norm = (email or "").strip().lower()
+            pw_hash = hashlib.sha256((pwd or "").encode()).hexdigest()
+
+            if not email_norm or not pwd:
+                st.error("Please enter email and password.")
+                st.stop()
 
             try:
-                response = supabase.table("users").select("*").eq("email", email).execute()
+                # Nur notwendige Spalten holen
+                response = supabase.table("users").select("pwd, subscription_active").eq("email", email_norm).execute()
 
                 if not response.data:
                     st.error("Invalid email or password.")
-                else:
-                    user = response.data[0]
-                    if user["pwd"] != pw_hash:
-                        st.error("Invalid email or password.")
-                    else:
-                        # ✅ Login erfolgreich
-                        SESSION.logged_in = True
-                        SESSION.username = email
+                    st.stop()
 
-                        subscription_active = user.get("subscription_active", False)
-                        SESSION.subscription_active = subscription_active
-                        SESSION.user_plan = "paid" if subscription_active else "free"
+                user = response.data[0]
+                if user.get("pwd") != pw_hash:
+                    st.error("Invalid email or password.")
+                    st.stop()
 
-                        redirect_to("news")
+                # ✅ Login erfolgreich
+                SESSION.logged_in = True
+                SESSION.username = email_norm
+
+                subscription_active = bool(user.get("subscription_active", False))
+                SESSION.subscription_active = subscription_active
+                SESSION.user_plan = "paid" if subscription_active else "free"
+
+                redirect_to("news")
 
             except Exception as e:
                 st.error(f"Login error: {e}")
