@@ -1269,7 +1269,7 @@ if view == "login":
                     st.error("Invalid email or password.")
                 else:
                     user = response.data[0]
-                    if user["password"] != pw_hash:
+                    if user["pwd"] != pw_hash:
                         st.error("Invalid email or password.")
                     else:
                         # ✅ Login erfolgreich
