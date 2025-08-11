@@ -15,18 +15,40 @@ from email_utils import send_reset_email
 import hashlib
 from supabase import create_client, Client
 
-# === Supabase Verbindung ===
-SUPABASE_URL = "https://hpjprbhavtewgpbjwdic.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwanByYmhhdnRld2dwYmp3ZGljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NTMyMzcsImV4cCI6MjA3MDIyOTIzN30.9Dk0YhonY5nT80UdRo6VtQ76jfSOXEavmjMH_FwaMvw"
+# === Supabase client (Frontend: nur mit ANON key!) ===
+import os
+from supabase import create_client, Client
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-def insert_user_to_supabase(email, pwd_hash):
+# bevorzugt aus Streamlit Secrets, sonst aus ENV
+SUPABASE_URL = (st.secrets.get("SUPABASE_URL") if hasattr(st, "secrets") else None) or os.getenv("SUPABASE_URL")
+SUPABASE_ANON_KEY = (st.secrets.get("SUPABASE_ANON_KEY") if hasattr(st, "secrets") else None) or os.getenv("SUPABASE_ANON_KEY")
+
+supabase: Client | None = None
+if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+    st.warning("Supabase URL/Anon Key not configured (add to Streamlit Secrets or ENV).")
+else:
+    supabase = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+
+def insert_user_to_supabase(email: str, pwd_hash: str):
+    """
+    Legt den Nutzer in der Supabase-Tabelle 'users' an.
+    Wichtig: Spalte heißt 'pwd' (nicht 'password').
+    Email wird lowercase gespeichert, damit Webhook-Matching zuverlässig klappt.
+    """
+    if supabase is None:
+        return False, "Supabase client not configured"
+
     data = {
-        "email": email,
-        "password": pwd_hash,
+        "email": email.strip().lower(),
+        "pwd": pwd_hash,                 # <-- richtige Spalte
         "subscription_active": False
     }
-    supabase.table("users").insert([data]).execute()  # <-- WICHTIG: [data]
+    try:
+        res = supabase.table("users").insert(data).execute()
+        return True, res.data
+    except Exception as e:
+        return False, str(e)
 
 
 # === Datei-Pfad definieren ===
