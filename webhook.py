@@ -1,55 +1,49 @@
 import os
+import json
 import stripe
-from flask import Flask, request, jsonify
-from supabase import create_client, Client
+from flask import Flask, request
+from supabase import create_client
 
 app = Flask(__name__)
 
-# Stripe Setup
 stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
+supabase = create_client(os.environ.get("SUPABASE_URL"), os.environ.get("SUPABASE_SERVICE_ROLE_KEY"))
+
 endpoint_secret = os.environ.get("STRIPE_WEBHOOK_SECRET")
-
-# Supabase Setup (mit Service Role Key!)
-supabase_url = os.environ.get("SUPABASE_URL")
-supabase_service_role_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
-supabase: Client = create_client(supabase_url, supabase_service_role_key)
-
 
 @app.route("/webhook", methods=["POST"])
 def stripe_webhook():
     payload = request.data
     sig_header = request.headers.get("Stripe-Signature")
-    event = None
 
     try:
-        event = stripe.Webhook.construct_event(
-            payload, sig_header, endpoint_secret
-        )
-    except stripe.error.SignatureVerificationError:
-        return "Invalid signature", 400
+        event = stripe.Webhook.construct_event(payload, sig_header, endpoint_secret)
+    except stripe.error.SignatureVerificationError as e:
+        print(f"❌ Webhook signature verification failed: {e}")
+        return "Bad signature", 400
     except Exception as e:
-        return str(e), 400
+        print(f"❌ Webhook error: {e}")
+        return "Webhook error", 400
 
-    # 📩 Ereignis auswerten
+    print(f"✅ Event empfangen: {event['type']}")
+    print(f"📦 Payload: {json.dumps(event, indent=2)}")
+
     if event["type"] == "checkout.session.completed":
         session = event["data"]["object"]
-
-        # E-Mail des Käufers auslesen
         customer_email = session.get("customer_email")
 
-        if customer_email:
-            try:
-                # Nutzer in Supabase auf "paid" setzen
-                supabase.table("users").update({
-                    "subscription_active": True,
-                    "plan": "paid"
-                }).eq("email", customer_email).execute()
-                print(f"✅ Nutzer {customer_email} auf paid gesetzt.")
-            except Exception as e:
-                print(f"❌ Fehler beim Update in Supabase: {e}")
+        if not customer_email:
+            print("❌ Keine Kunden-E-Mail im Event gefunden")
+            return "No email", 400
 
-    return jsonify(success=True)
+        try:
+            response = supabase.table("users").update({"subscription_active": True}).eq("email", customer_email).execute()
+            print(f"✅ Supabase-Update-Response: {response}")
+        except Exception as e:
+            print(f"❌ Fehler beim Supabase-Update: {e}")
+            return "Supabase update error", 500
 
+    return "OK", 200
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
