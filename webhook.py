@@ -8,10 +8,10 @@ import stripe
 app = Flask(__name__)
 
 # === Keys ===
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
-STRIPE_SECRET = os.environ.get("STRIPE_SECRET")
-STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
+stripe.api_key = os.environ.get("STRIPE_SECRET_KEY")
+endpoint_secret = os.environ.get("STRIPE_WEBHOOK_SECRET")
+supabase_url = os.environ.get("SUPABASE_URL")
+supabase_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 stripe.api_key = STRIPE_SECRET
