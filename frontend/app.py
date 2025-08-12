@@ -12,7 +12,7 @@ import os
 from dotenv import load_dotenv
 from email_utils import send_reset_email
 from supabase import create_client, Client
-import time 
+import time
 
 # .env laden (lokal)
 load_dotenv()
@@ -135,22 +135,24 @@ def _post_with_retry(endpoint: str, payload: dict, attempts: int = 3, timeout: i
 def get_checkout_url(app_email: str) -> str | None:
     """
     Erstellt serverseitig eine Stripe-Checkout-Session (Render).
+    Nutzt die kurzen Aliasse beim Webhook-Service (/checkout).
     """
     email = (app_email or "").strip().lower()
     if not email:
         st.error("Missing email for checkout.")
         return None
-    return _post_with_retry("/create-checkout-session", {"email": email})
+    return _post_with_retry("/checkout", {"email": email})
 
 def get_portal_url(app_email: str) -> str | None:
     """
     Öffnet das Stripe Customer Portal (Render).
+    Nutzt die kurzen Aliasse beim Webhook-Service (/portal).
     """
     email = (app_email or "").strip().lower()
     if not email:
         st.error("Missing email for portal.")
         return None
-    return _post_with_retry("/create-portal-session", {"email": email})
+    return _post_with_retry("/portal", {"email": email})
 
 # ---- Abo-Status live nachladen ----
 def refresh_subscription_status():
