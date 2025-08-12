@@ -1,6 +1,8 @@
 import os
 import json
 import logging
+from typing import Optional
+
 import stripe
 from flask import Flask, request, jsonify
 from supabase import create_client, Client
@@ -15,6 +17,11 @@ STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")  # Service-Role!
 
+# Für Checkout-Session (Option B)
+STRIPE_PRICE_ID = os.environ.get("STRIPE_PRICE_ID")          # z.B. price_123
+STRIPE_SUCCESS_URL = os.environ.get("STRIPE_SUCCESS_URL")    # z.B. https://insightfundamental.streamlit.app/?view=news
+STRIPE_CANCEL_URL = os.environ.get("STRIPE_CANCEL_URL")      # z.B. https://insightfundamental.streamlit.app/?view=register
+
 if not STRIPE_API_KEY or not STRIPE_WEBHOOK_SECRET:
     raise RuntimeError("Stripe ENV missing (STRIPE_API_KEY / STRIPE_WEBHOOK_SECRET)")
 if not SUPABASE_URL or not SUPABASE_KEY:
@@ -26,12 +33,12 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 app = Flask(__name__)
 
 # ---------- Helpers ----------
-def normalize_email(email: str | None) -> str | None:
+def normalize_email(email: Optional[str]) -> Optional[str]:
     if not email:
         return None
     return email.strip().lower()
 
-def get_email_from_customer_id(customer_id: str | None) -> str | None:
+def get_email_from_customer_id(customer_id: Optional[str]) -> Optional[str]:
     if not customer_id:
         return None
     try:
@@ -63,6 +70,49 @@ def supabase_set_subscription(email: str, active: bool) -> dict:
     ).execute()
     return {"mode": "upsert", "data": upsert.data}
 
+# ---------- NEW: serverseitige Erstellung der Checkout-Session ----------
+@app.route("/create-checkout-session", methods=["POST"])
+def create_checkout_session():
+    try:
+        data = request.get_json(force=True) or {}
+        app_email = normalize_email(data.get("email"))
+        if not app_email:
+            return jsonify(error="email required"), 400
+        if not STRIPE_PRICE_ID or not STRIPE_SUCCESS_URL or not STRIPE_CANCEL_URL:
+            return jsonify(error="Server misconfigured (missing STRIPE_PRICE_ID / STRIPE_SUCCESS_URL / STRIPE_CANCEL_URL)"), 500
+
+        # Optional: vorhandenen Customer wiederverwenden
+        customer_id = None
+        try:
+            found = stripe.Customer.list(email=app_email, limit=1)
+            if found.data:
+                customer_id = found.data[0].id
+            else:
+                customer = stripe.Customer.create(email=app_email)
+                customer_id = customer.id
+        except Exception as e:
+            log.warning("⚠️ could not ensure customer for %s: %s", app_email, e)
+            customer_id = None
+
+        session = stripe.checkout.Session.create(
+            mode="subscription",
+            line_items=[{"price": STRIPE_PRICE_ID, "quantity": 1}],
+            # Eindeutige Zuordnung zur App:
+            client_reference_id=app_email,
+            metadata={"app_email": app_email},
+            # UX / Redirects:
+            customer=customer_id,
+            customer_email=None if customer_id else app_email,
+            allow_promotion_codes=True,
+            success_url=STRIPE_SUCCESS_URL,
+            cancel_url=STRIPE_CANCEL_URL,
+            automatic_tax={"enabled": True},
+        )
+        return jsonify(url=session.url)
+    except Exception as e:
+        log.error("❌ create-checkout-session error: %s", e, exc_info=True)
+        return jsonify(error=str(e)), 500
+
 # ---------- Webhook ----------
 @app.route("/webhook", methods=["POST"])
 def stripe_webhook():
@@ -85,10 +135,15 @@ def stripe_webhook():
     # ========== checkout.session.completed ==========
     if etype == "checkout.session.completed":
         session = event["data"]["object"]
-        # In deinen Events ist customer_email oft null → customer_details.email verwenden
-        email = normalize_email((session.get("customer_details") or {}).get("email"))
+
+        # 1) Bevorzugt: App-Email aus client_reference_id / metadata
+        email = normalize_email(session.get("client_reference_id")) \
+                or normalize_email((session.get("metadata") or {}).get("app_email"))
+
+        # 2) Fallbacks (Stripe-Daten)
         if not email:
-            # Fallback via customer_id
+            email = normalize_email((session.get("customer_details") or {}).get("email"))
+        if not email:
             email = get_email_from_customer_id(session.get("customer"))
 
         if not email:
@@ -105,7 +160,7 @@ def stripe_webhook():
     # ========== customer.subscription.created / updated ==========
     elif etype in ("customer.subscription.created", "customer.subscription.updated"):
         sub = event["data"]["object"]
-        status = (sub.get("status") or "").lower()  # active, trialing, past_due, canceled, unpaid, incomplete, ...
+        status = (sub.get("status") or "").lower()  # active, trialing, past_due, canceled, unpaid, ...
         customer_id = sub.get("customer")
         email = get_email_from_customer_id(customer_id)
 
@@ -158,6 +213,6 @@ def stripe_webhook():
 
 # ---------- Serverstart ----------
 if __name__ == "__main__":
-    # Render setzt PORT; fallback auf 10000, weil dein Service darauf lief
+    # Render setzt PORT; fallback auf 10000 (dein Service lief darauf)
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
