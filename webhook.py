@@ -278,6 +278,15 @@ def list_routes():
     except Exception as e:
         return jsonify(error=str(e)), 500
 
+# ---------- Health / Root ----------
+@app.route("/", methods=["GET", "HEAD"])
+def root():
+    return "ok", 200
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify(status="ok"), 200
+
 # ---------- Serverstart ----------
 if __name__ == "__main__":
     # Render setzt PORT; fallback auf 10000 (dein Service lief darauf)
