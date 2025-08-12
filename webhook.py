@@ -85,6 +85,8 @@ def health():
 
 # ---------- Create Checkout Session (serverseitig) ----------
 @app.route("/create-checkout-session", methods=["POST"])
+@app.route("/create_checkout_session", methods=["POST"])
+@app.route("/checkout", methods=["POST"])
 def create_checkout_session():
     try:
         data = request.get_json(force=True) or {}
@@ -128,6 +130,8 @@ def create_checkout_session():
 
 # ---------- Create Customer Portal Session (Manage subscription) ----------
 @app.route("/create-portal-session", methods=["POST"])
+@app.route("/create_portal_session", methods=["POST"])
+@app.route("/portal", methods=["POST"])
 def create_portal_session():
     """
     Erstellt eine Stripe Billing-Portal-Session für den Kunden (per E-Mail gesucht).
