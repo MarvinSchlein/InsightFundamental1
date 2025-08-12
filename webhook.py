@@ -154,6 +154,15 @@ def create_portal_session():
         log.error("❌ create_portal_session error: %s", e, exc_info=True)
         return jsonify(error=str(e)), 500
 
+# --- Aliasse für Endpoints (Bindestrich/Unterstrich/Trailing Slash) ---
+# Wichtig: NACH den Funktionsdefinitionen create_checkout_session / create_portal_session
+
+app.add_url_rule("/create_checkout_session", view_func=create_checkout_session, methods=["POST"])
+app.add_url_rule("/create-checkout-session/", view_func=create_checkout_session, methods=["POST"])
+
+app.add_url_rule("/create_portal_session", view_func=create_portal_session, methods=["POST"])
+app.add_url_rule("/create-portal-session/", view_func=create_portal_session, methods=["POST"])
+
 # ---------- Webhook ----------
 @app.route("/webhook", methods=["POST"])
 def stripe_webhook():
