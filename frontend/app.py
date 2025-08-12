@@ -1732,51 +1732,27 @@ if view in ["news", "Alle Nachrichten"]:
         redirect_to("login")
         st.stop()
 
-    # 2) Abo-Status beim Betreten live aus Supabase nachladen
-    try:
-        if supabase is not None:
-            res = supabase.table("users") \
-                .select("subscription_active") \
-                .eq("email", (SESSION.username or "").lower()) \
-                .execute()
-            if res.data:
-                SESSION.subscription_active = bool(res.data[0].get("subscription_active", False))
-                SESSION.user_plan = "paid" if SESSION.subscription_active else "free"
-    except Exception as e:
-        # Nicht blockieren – nur Info anzeigen
-        st.info(f"Could not refresh access right now. ({e})")
+    # 2) Beim Betreten: Abo-Status aus Supabase ziehen (nutzt deinen Helper)
+    refresh_subscription_status()
 
-    # 3) Falls kein aktives Abo: CTA + Refresh zeigen und stoppen
+    # 3) Falls kein aktives Abo: CTA (serverseitiger Checkout) + Refresh anzeigen
     if not SESSION.get("subscription_active", False):
-        st.warning("Access denied. Start the free trial to access the News Analysis.")
+        st.warning("Access denied. You must start the free trial to access the News Analysis.")
 
-        stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
-        col1, col2 = st.columns([1, 1])
-        with col1:
-            st.markdown(
-                f"""
-                <a href="{stripe_url}" target="_blank">
-                    <button style='padding:0.6em 1.2em;font-size:1.05em;border-radius:8px;background:#635bff;color:#fff;border:none;cursor:pointer;'>
-                        Start 14-day free Trial to get access
-                    </button>
-                </a>
-                """,
-                unsafe_allow_html=True
-            )
-        with col2:
+        c1, c2 = st.columns([1, 1])
+        with c1:
+            if st.button("Start 14-day free Trial to get access"):
+                url = get_checkout_url(SESSION.get("username") or "")
+                if url:
+                    components.html(f"<script>window.location.href='{url}';</script>", height=0)
+                    st.stop()
+                else:
+                    st.error("Could not start checkout. Please try again.")
+
+        with c2:
             if st.button("Refresh access"):
-                try:
-                    if supabase is not None:
-                        res = supabase.table("users") \
-                            .select("subscription_active") \
-                            .eq("email", (SESSION.username or "").lower()) \
-                            .execute()
-                        if res.data:
-                            SESSION.subscription_active = bool(res.data[0].get("subscription_active", False))
-                            SESSION.user_plan = "paid" if SESSION.subscription_active else "free"
-                            st.rerun()
-                except Exception as e:
-                    st.error(f"Refresh failed: {e}")
+                refresh_subscription_status()
+                st.rerun()
 
         st.stop()
 
