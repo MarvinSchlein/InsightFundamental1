@@ -95,37 +95,33 @@ SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 ABSENDER = SMTP_USER
 
 # ===== Stripe via Render-Webhook (einmalig definieren) =====
-RENDER_API_BASE = os.getenv(
-    "RENDER_API_BASE",
-    "https://insightfundamental1-webhook-automation.onrender.com"  # deine Render-Webhook-URL
-)
+RENDER_API_BASE = (
+    (st.secrets.get("RENDER_API_BASE") if hasattr(st, "secrets") else None)
+    or os.getenv("RENDER_API_BASE")
+    or "https://insightfundamental1-webhook-automation.onrender.com"
+).rstrip("/")  # trailing slash entfernen, damit wir sauber joinen
 
 def _post_with_retry(endpoint: str, payload: dict, attempts: int = 3, timeout: int = 30) -> str | None:
     """
-    POST mit Retries + erhöhtem Timeout. Gibt die 'url' aus der JSON-Antwort zurück.
+    Robust POST (Retry + höheres Timeout). Gibt 'url' aus JSON zurück.
     """
     last_err = None
+    url = f"{RENDER_API_BASE}{endpoint}"
     for i in range(attempts):
         try:
-            resp = requests.post(
-                f"{RENDER_API_BASE}{endpoint}",
-                json=payload,
-                timeout=timeout,
-            )
+            resp = requests.post(url, json=payload, timeout=timeout)
             if resp.ok:
-                data = {}
                 try:
                     data = resp.json() or {}
                 except Exception:
-                    pass
-                url = data.get("url")
-                if url:
-                    return url
-                else:
-                    st.error(f"Service responded without URL: {resp.text[:200]}")
-                    return None
+                    data = {}
+                redirect_url = data.get("url")
+                if redirect_url:
+                    return redirect_url
+                st.error(f"Service responded without URL: {resp.text[:300]}")
+                return None
             else:
-                last_err = f"{resp.status_code} – {resp.text[:200]}"
+                last_err = f"{resp.status_code} – {resp.text[:300]}"
         except Exception as e:
             last_err = str(e)
 
@@ -136,11 +132,9 @@ def _post_with_retry(endpoint: str, payload: dict, attempts: int = 3, timeout: i
     st.error(f"Request failed after {attempts} attempts: {last_err}")
     return None
 
-
 def get_checkout_url(app_email: str) -> str | None:
     """
-    Erstellt serverseitig eine Stripe-Checkout-Session über deinen Render-Service
-    und gibt die Weiterleitungs-URL zurück.
+    Erstellt serverseitig eine Stripe-Checkout-Session (Render).
     """
     email = (app_email or "").strip().lower()
     if not email:
@@ -148,11 +142,9 @@ def get_checkout_url(app_email: str) -> str | None:
         return None
     return _post_with_retry("/create-checkout-session", {"email": email})
 
-
 def get_portal_url(app_email: str) -> str | None:
     """
-    Erstellt eine Stripe Customer-Portal-Session (Kündigen/Plan ändern) über deinen Render-Service
-    und gibt die Weiterleitungs-URL zurück.
+    Öffnet das Stripe Customer Portal (Render).
     """
     email = (app_email or "").strip().lower()
     if not email:
