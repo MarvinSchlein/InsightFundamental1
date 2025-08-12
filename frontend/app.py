@@ -120,6 +120,49 @@ def get_checkout_url(app_email: str) -> str | None:
         st.error(f"Checkout error: {e}")
         return None
 
+# ===== Stripe Checkout via Render-Webhook (NEU) =====
+RENDER_API_BASE = os.getenv(
+    "RENDER_API_BASE",
+    "https://insightfundamental1-webhook-automation.onrender.com"
+)
+
+def get_checkout_url(app_email: str) -> str | None:
+    try:
+        resp = requests.post(
+            f"{RENDER_API_BASE}/create-checkout-session",
+            json={"email": (app_email or "").strip().lower()},
+            timeout=10,
+        )
+        if resp.ok:
+            data = resp.json() or {}
+            return data.get("url")
+        else:
+            st.error(f"Checkout init failed: {resp.status_code} – {resp.text}")
+            return None
+    except Exception as e:
+        st.error(f"Checkout error: {e}")
+        return None
+
+# ⬇⬇⬇ Hier einfügen ⬇⬇⬇
+def refresh_subscription_status():
+    """
+    Pulls 'subscription_active' for the logged-in user from Supabase
+    and updates session: subscription_active + user_plan ('paid'|'free').
+    """
+    try:
+        state = st.session_state
+        if supabase is None or not state.get("username"):
+            return
+
+        email = state["username"].strip().lower()
+        resp = supabase.table("users").select("subscription_active").eq("email", email).execute()
+        if resp.data:
+            active = bool(resp.data[0].get("subscription_active"))
+            state.subscription_active = active
+            state.user_plan = "paid" if active else "free"
+    except Exception as e:
+        st.warning(f"Refresh error: {e}")
+
 # === Text Content (English as default) ===
 
 TEXTS = {
