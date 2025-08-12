@@ -1830,15 +1830,9 @@ if view in ["news", "Alle Nachrichten"]:
             font-weight: 600;
             margin-bottom: 0.5em;
         }
-        .user-dashboard .abo-status.active {
-            color: #1a7f3c;
-        }
-        .user-dashboard .abo-status.cancelled {
-            color: #b80000;
-        }
-        .user-dashboard .abo-status.trial {
-            color: #bfa100;
-        }
+        .user-dashboard .abo-status.active { color: #1a7f3c; }
+        .user-dashboard .abo-status.cancelled { color: #b80000; }
+        .user-dashboard .abo-status.trial { color: #bfa100; }
         </style>
         """, unsafe_allow_html=True)
 
@@ -1846,7 +1840,7 @@ if view in ["news", "Alle Nachrichten"]:
 
         # --- PROFIL ---
         st.markdown(f'<h3>{get_text("profile")}</h3>', unsafe_allow_html=True)
-        user_email = st.session_state.get("username", "Unbekannt")
+        user_email = st.session_state.get("username", "Unknown")
         st.write(f"**E-Mail:** {user_email}")
         
         with st.expander(get_text("change_password")):
@@ -1865,23 +1859,38 @@ if view in ["news", "Alle Nachrichten"]:
         
         st.markdown("<hr style='margin:1.5em 0; border: none; border-top: 1.5px solid #e6f0fa;'>", unsafe_allow_html=True)
 
-        # --- ABONNEMENT ---
+        # --- ABONNEMENT / SUBSCRIPTION ---
         st.markdown(f'<h3>{get_text("subscription")}</h3>', unsafe_allow_html=True)
-        abo_status = st.session_state.get("user_plan", "trial")
-        status_map = {
-            "paid": (get_text("active"), "active"),
-            "trial": (get_text("trial"), "trial"),
-            "cancelled": (get_text("cancelled"), "cancelled")
-        }
-        status_text, status_class = status_map.get(abo_status, (get_text("unknown"), ""))
-        st.markdown(f'<div class="abo-status {status_class}">{get_text("status")} {status_text}</div>', unsafe_allow_html=True)
-        
-        if abo_status != "cancelled":
-            if st.button(get_text("cancel_subscription"), key="dash_cancel_btn"):
-                st.session_state.user_plan = "cancelled"
-                st.success(get_text("subscription_cancelled"))
+
+        active = bool(SESSION.get("subscription_active", False))
+        status_text = "Active" if active else "Inactive"
+        status_class = "active" if active else "cancelled"
+        st.markdown(f'<div class="abo-status {status_class}'>Status: {status_text}</div>', unsafe_allow_html=True)
+
+        # → Portal/Trial Buttons (echte Aktionen)
+        if active:
+            # Manage subscription (Stripe Customer Portal)
+            if st.button("Manage subscription", key="dash_manage_sub"):
+                url = get_portal_url(SESSION.get("username") or "")
+                if url:
+                    components.html(f"<script>window.location.href='{url}';</script>", height=0)
+                    st.stop()
+                else:
+                    st.error("Could not open the customer portal. Please try again.")
         else:
-            st.info(get_text("subscription_already_cancelled"))
+            # Start Trial / Subscribe
+            if st.button("Start 14-day free trial", key="dash_start_trial"):
+                url = get_checkout_url(SESSION.get("username") or "")
+                if url:
+                    components.html(f"<script>window.location.href='{url}';</script>", height=0)
+                    st.stop()
+                else:
+                    st.error("Could not start checkout. Please try again.")
+
+            # Optional: Status nach Rückkehr schnell aktualisieren
+            if st.button("Refresh access", key="dash_refresh_access"):
+                refresh_subscription_status()
+                st.rerun()
         
         st.markdown("<hr style='margin:1.5em 0; border: none; border-top: 1.5px solid #e6f0fa;'>", unsafe_allow_html=True)
 
