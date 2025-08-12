@@ -1372,10 +1372,15 @@ if view == "login":
                 SESSION.logged_in = True
                 SESSION.username = email_norm
 
+                # Setze Status aus Query (sofortige UX)
                 subscription_active = bool(user.get("subscription_active", False))
                 SESSION.subscription_active = subscription_active
                 SESSION.user_plan = "paid" if subscription_active else "free"
 
+                # 🔄 Hol den Status zusätzlich über den Helper (falls Webhook mittlerweile aktualisiert hat)
+                refresh_subscription_status()
+
+                # Weiter zur News-Seite
                 redirect_to("news")
 
             except Exception as e:
