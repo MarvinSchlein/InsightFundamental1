@@ -10,15 +10,13 @@ import numpy as np
 import requests
 import os
 from dotenv import load_dotenv
-load_dotenv()
 from email_utils import send_reset_email
-import hashlib
 from supabase import create_client, Client
+
+# .env laden (lokal)
+load_dotenv()
 
 # === Supabase client (Frontend: nur mit ANON key!) ===
-import os
-from supabase import create_client, Client
-
 # bevorzugt aus Streamlit Secrets, sonst aus ENV
 SUPABASE_URL = (st.secrets.get("SUPABASE_URL") if hasattr(st, "secrets") else None) or os.getenv("SUPABASE_URL")
 SUPABASE_ANON_KEY = (st.secrets.get("SUPABASE_ANON_KEY") if hasattr(st, "secrets") else None) or os.getenv("SUPABASE_ANON_KEY")
@@ -73,10 +71,6 @@ def save_users(users: dict):
         USER_FILE.write_text(json.dumps(users, indent=4))
     except Exception as e:
         st.error(f"Fehler beim Speichern der Nutzerdaten: {e}")
-    
-
-def save_users(users: dict):
-    USER_FILE.write_text(json.dumps(users, indent=4))
 
 
 # 👉 Navigations-Setup (einmalig zu Beginn der Datei):
@@ -89,18 +83,42 @@ def redirect_to(page_name):
 
 view = st.query_params.get("view", "landing")
 
-# Lade .env Datei für lokale Entwicklung
-load_dotenv()
-
 # === Konfiguration ===
 st.set_page_config(page_title="InsightFundamental", layout="wide")
 
-# === Secrets sicher laden ===
+# === Secrets sicher laden (E-Mail) ===
 SMTP_SERVER = os.getenv("SMTP_SERVER")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 ABSENDER = SMTP_USER
+
+# ===== Stripe Checkout via Render-Webhook (NEU) =====
+RENDER_API_BASE = os.getenv(
+    "RENDER_API_BASE",
+    "https://insightfundamental1-webhook-automation.onrender.com"  # deine Render-Webhook-URL
+)
+
+def get_checkout_url(app_email: str) -> str | None:
+    """
+    Erstellt serverseitig eine Stripe-Checkout-Session über deinen Render-Service
+    und gibt die Weiterleitungs-URL zurück.
+    """
+    try:
+        resp = requests.post(
+            f"{RENDER_API_BASE}/create-checkout-session",
+            json={"email": (app_email or "").strip().lower()},
+            timeout=10,
+        )
+        if resp.ok:
+            data = resp.json() or {}
+            return data.get("url")
+        else:
+            st.error(f"Checkout init failed: {resp.status_code} – {resp.text}")
+            return None
+    except Exception as e:
+        st.error(f"Checkout error: {e}")
+        return None
 
 # === Text Content (English as default) ===
 
