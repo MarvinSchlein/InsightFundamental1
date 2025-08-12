@@ -17,15 +17,17 @@ STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")  # Service-Role!
 
-# Für Checkout-Session (Option B)
-STRIPE_PRICE_ID = os.environ.get("STRIPE_PRICE_ID")          # z.B. price_123
-STRIPE_SUCCESS_URL = os.environ.get("STRIPE_SUCCESS_URL")    # z.B. https://insightfundamental.streamlit.app/?view=news
-STRIPE_CANCEL_URL = os.environ.get("STRIPE_CANCEL_URL")      # z.B. https://insightfundamental.streamlit.app/?view=register
+# Für Checkout-/Portal-Session (Option B)
+STRIPE_PRICE_ID   = os.environ.get("STRIPE_PRICE_ID")          # z.B. price_123
+STRIPE_SUCCESS_URL = os.environ.get("STRIPE_SUCCESS_URL") or "https://insightfundamental.streamlit.app/?view=news&from=stripe"
+STRIPE_CANCEL_URL  = os.environ.get("STRIPE_CANCEL_URL")  or "https://insightfundamental.streamlit.app/?view=register"
 
 if not STRIPE_API_KEY or not STRIPE_WEBHOOK_SECRET:
     raise RuntimeError("Stripe ENV missing (STRIPE_API_KEY / STRIPE_WEBHOOK_SECRET)")
 if not SUPABASE_URL or not SUPABASE_KEY:
     raise RuntimeError("Supabase ENV missing (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)")
+if not STRIPE_PRICE_ID:
+    raise RuntimeError("Stripe ENV missing (STRIPE_PRICE_ID)")
 
 stripe.api_key = STRIPE_API_KEY
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -70,7 +72,16 @@ def supabase_set_subscription(email: str, active: bool) -> dict:
     ).execute()
     return {"mode": "upsert", "data": upsert.data}
 
-# ---------- NEW: serverseitige Erstellung der Checkout-Session ----------
+# ---------- Health / Root ----------
+@app.route("/", methods=["GET", "HEAD"])
+def root():
+    return "ok", 200
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify(status="ok"), 200
+
+# ---------- Create Checkout Session (serverseitig) ----------
 @app.route("/create-checkout-session", methods=["POST"])
 def create_checkout_session():
     try:
@@ -78,10 +89,8 @@ def create_checkout_session():
         app_email = normalize_email(data.get("email"))
         if not app_email:
             return jsonify(error="email required"), 400
-        if not STRIPE_PRICE_ID or not STRIPE_SUCCESS_URL or not STRIPE_CANCEL_URL:
-            return jsonify(error="Server misconfigured (missing STRIPE_PRICE_ID / STRIPE_SUCCESS_URL / STRIPE_CANCEL_URL)"), 500
 
-        # Optional: vorhandenen Customer wiederverwenden
+        # Kunde deterministisch über App-Mail finden/erstellen
         customer_id = None
         try:
             found = stripe.Customer.list(email=app_email, limit=1)
@@ -92,7 +101,7 @@ def create_checkout_session():
                 customer_id = customer.id
         except Exception as e:
             log.warning("⚠️ could not ensure customer for %s: %s", app_email, e)
-            customer_id = None
+            customer_id = None  # Fallback: lassen wir Stripe über customer_email mappen
 
         session = stripe.checkout.Session.create(
             mode="subscription",
@@ -100,17 +109,47 @@ def create_checkout_session():
             # Eindeutige Zuordnung zur App:
             client_reference_id=app_email,
             metadata={"app_email": app_email},
-            # UX / Redirects:
+            # Customer fest referenzieren (robust) – oder fallback über customer_email
             customer=customer_id,
             customer_email=None if customer_id else app_email,
+            # UX / Redirects:
             allow_promotion_codes=True,
+            automatic_tax={"enabled": True},
             success_url=STRIPE_SUCCESS_URL,
             cancel_url=STRIPE_CANCEL_URL,
-            automatic_tax={"enabled": True},
         )
-        return jsonify(url=session.url)
+        return jsonify(url=session.url), 200
+
     except Exception as e:
         log.error("❌ create-checkout-session error: %s", e, exc_info=True)
+        return jsonify(error=str(e)), 500
+
+# ---------- Create Customer Portal Session (Manage subscription) ----------
+@app.route("/create-portal-session", methods=["POST"])
+def create_portal_session():
+    """
+    Erstellt eine Stripe Billing-Portal-Session für den Kunden (per E-Mail gesucht).
+    Voraussetzung: Billing Portal in Stripe aktiviert.
+    """
+    try:
+        data = request.get_json(force=True) or {}
+        app_email = normalize_email(data.get("email"))
+        if not app_email:
+            return jsonify(error="email required"), 400
+
+        customers = stripe.Customer.list(email=app_email, limit=1)
+        if not customers.data:
+            return jsonify(error="customer not found"), 404
+
+        customer_id = customers.data[0].id
+        session = stripe.billing_portal.Session.create(
+            customer=customer_id,
+            return_url=STRIPE_SUCCESS_URL,
+        )
+        return jsonify(url=session.url), 200
+
+    except Exception as e:
+        log.error("❌ create_portal_session error: %s", e, exc_info=True)
         return jsonify(error=str(e)), 500
 
 # ---------- Webhook ----------
