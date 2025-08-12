@@ -1346,6 +1346,7 @@ if view == "login":
     st.stop()
 
 # === Registration ===
+
 if view == "register":
     st.markdown("""
     <style>
@@ -1368,8 +1369,15 @@ if view == "register":
         margin-bottom:1.2em;
         text-align:center;
     }
+    .register-card .stTextInput, .register-card .stTextInput>div, .register-card .stTextInput>div>div {
+        width: 120px !important;
+        max-width: 120px !important;
+        min-width: 60px !important;
+    }
     .register-card .stTextInput>div>div>input {
         width: 120px !important;
+        max-width: 120px !important;
+        min-width: 60px !important;
     }
     .register-card .stButton>button {
         width:100%;
@@ -1378,7 +1386,14 @@ if view == "register":
         border-radius:8px;
         margin-top:1.2em;
     }
-    .terms-checkbox * {
+    .register-card label, .register-card .stCheckbox {
+        width:100%;
+        text-align:left;
+    }
+    .register-card .stCheckbox span {
+        color: #000000 !important;
+    }
+    .terms-checkbox *, .terms-checkbox label, .terms-checkbox span, .terms-checkbox div {
         color: #000000 !important;
     }
     </style>
@@ -1403,50 +1418,42 @@ if view == "register":
             elif pwd != pwd_confirm:
                 st.error("Passwords do not match.")
             else:
-                try:
-                    # Prüfen, ob E-Mail schon existiert
-                    existing_user = supabase.table("users").select("*").eq("email", email).execute()
-                    if existing_user.data and len(existing_user.data) > 0:
-                        st.error("This email is already registered.")
-                    else:
-                        # Passwort-Hash
-                        pwd_hash = hashlib.sha256(pwd.encode()).hexdigest()
+                # ✅ Nutzer in lokale JSON schreiben (falls du sie noch nutzt)
+                users = load_users()
+                email_lower = (email or "").strip().lower()
 
-                        # Nutzer in Supabase speichern (mit [data] Fix)
-                        data = {
-                            "email": email,
-                            "pwd": pwd_hash,
-                            "subscription_active": False
-                        }
-                        result = supabase.table("users").insert([data]).execute()
+                if email_lower in users:
+                    st.error("This email is already registered.")
+                else:
+                    pwd_hash = hashlib.sha256(pwd.encode()).hexdigest()
 
-                        if result.data:
-                            SESSION.logged_in = True
-                            SESSION.username = email
-                            SESSION.user_plan = "free"
+                    users[email_lower] = {
+                        "pwd": pwd_hash,
+                        "subscription_active": False
+                    }
+                    save_users(users)
 
-                            st.success("Your account has been successfully created!")
+                    # ✅ Supabase: Nutzer anlegen (falls noch nicht vorhanden)
+                    ok, res = insert_user_to_supabase(email_lower, pwd_hash)
+                    if not ok:
+                        st.warning(f"Supabase insert warning: {res}")
 
-                            # Stripe Button anzeigen
-                            stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
-                            st.markdown(
-                                f"""
-                                <div style='margin-top: 1.5rem; text-align: center;'>
-                                    <a href="{stripe_url}" target="_blank">
-                                        <button style='padding: 0.6em 1.2em; font-size: 1.1em; border-radius: 8px; background-color: #635bff; color: white; border: none; cursor: pointer;'>
-                                            Start 14-day free trial now!
-                                        </button>
-                                    </a>
-                                </div>
-                                """,
-                                unsafe_allow_html=True
-                            )
+                    # ✅ Session setzen
+                    SESSION.logged_in = True
+                    SESSION.username = email_lower
+                    SESSION.user_plan = "free"
+
+                    st.success("Your account has been successfully created!")
+
+                    # ✅ Stripe-Checkout via Render-Service (serverseitig Session erzeugen)
+                    if st.button("Start 14-day free trial now!"):
+                        url = get_checkout_url(SESSION.username)
+                        if url:
+                            # sauberer Redirect
+                            components.html(f"<script>window.location.href='{url}';</script>", height=0)
                             st.stop()
-                        else:
-                            st.error("Unknown error: User could not be inserted into Supabase.")
 
-                except Exception as e:
-                    st.error(f"Registration failed: {e}")
+                    st.stop()
 
         st.markdown('</div>', unsafe_allow_html=True)
 
