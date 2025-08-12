@@ -18,9 +18,11 @@ SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")  # Service-Role!
 
 # Für Checkout-/Portal-Session (Option B)
-STRIPE_PRICE_ID   = os.environ.get("STRIPE_PRICE_ID")          # z.B. price_123
+STRIPE_PRICE_ID    = os.environ.get("STRIPE_PRICE_ID")          # z.B. price_123
 STRIPE_SUCCESS_URL = os.environ.get("STRIPE_SUCCESS_URL") or "https://insightfundamental.streamlit.app/?view=news&from=stripe"
 STRIPE_CANCEL_URL  = os.environ.get("STRIPE_CANCEL_URL")  or "https://insightfundamental.streamlit.app/?view=register"
+# ➕ NEU: eigene Return-URL fürs Billing-Portal (fallback = SUCCESS_URL)
+STRIPE_PORTAL_RETURN_URL = os.environ.get("STRIPE_PORTAL_RETURN_URL") or STRIPE_SUCCESS_URL
 
 if not STRIPE_API_KEY or not STRIPE_WEBHOOK_SECRET:
     raise RuntimeError("Stripe ENV missing (STRIPE_API_KEY / STRIPE_WEBHOOK_SECRET)")
@@ -101,7 +103,7 @@ def create_checkout_session():
                 customer_id = customer.id
         except Exception as e:
             log.warning("⚠️ could not ensure customer for %s: %s", app_email, e)
-            customer_id = None  # Fallback: lassen wir Stripe über customer_email mappen
+            customer_id = None  # Fallback: Stripe mappt über customer_email
 
         session = stripe.checkout.Session.create(
             mode="subscription",
@@ -144,7 +146,7 @@ def create_portal_session():
         customer_id = customers.data[0].id
         session = stripe.billing_portal.Session.create(
             customer=customer_id,
-            return_url=STRIPE_SUCCESS_URL,
+            return_url=STRIPE_PORTAL_RETURN_URL,   # <-- hier nutzen wir die neue ENV
         )
         return jsonify(url=session.url), 200
 
