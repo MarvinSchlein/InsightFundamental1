@@ -1865,7 +1865,10 @@ if view in ["news", "Alle Nachrichten"]:
         active = bool(SESSION.get("subscription_active", False))
         status_text = "Active" if active else "Inactive"
         status_class = "active" if active else "cancelled"
-        st.markdown(f'<div class="abo-status {status_class}'>Status: {status_text}</div>', unsafe_allow_html=True)
+        st.markdown(
+            f'<div class="abo-status {status_class}">Status: {status_text}</div>',
+            unsafe_allow_html=True
+        )
 
         # → Portal/Trial Buttons (echte Aktionen)
         if active:
