@@ -10,45 +10,23 @@ import numpy as np
 import requests
 import os
 from dotenv import load_dotenv
-from email_utils import send_reset_email
-from supabase import create_client, Client
-import time
-from urllib.parse import quote
-
-# .env laden (lokal)
 load_dotenv()
+from email_utils import send_reset_email
+import hashlib
+from supabase import create_client, Client
 
-# === Supabase client (Frontend: nur mit ANON key!) ===
-# bevorzugt aus Streamlit Secrets, sonst aus ENV
-SUPABASE_URL = (st.secrets.get("SUPABASE_URL") if hasattr(st, "secrets") else None) or os.getenv("SUPABASE_URL")
-SUPABASE_ANON_KEY = (st.secrets.get("SUPABASE_ANON_KEY") if hasattr(st, "secrets") else None) or os.getenv("SUPABASE_ANON_KEY")
+# === Supabase Verbindung ===
+SUPABASE_URL = "https://hpjprbhavtewgpbjwdic.supabase.co"
+SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwanByYmhhdnRld2dwYmp3ZGljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NTMyMzcsImV4cCI6MjA3MDIyOTIzN30.9Dk0YhonY5nT80UdRo6VtQ76jfSOXEavmjMH_FwaMvw"
 
-supabase: Client | None = None
-if not SUPABASE_URL or not SUPABASE_ANON_KEY:
-    st.warning("Supabase URL/Anon Key not configured (add to Streamlit Secrets or ENV).")
-else:
-    supabase = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
-
-
-def insert_user_to_supabase(email: str, pwd_hash: str):
-    """
-    Legt den Nutzer in der Supabase-Tabelle 'users' an.
-    Wichtig: Spalte heißt 'pwd' (nicht 'password').
-    Email wird lowercase gespeichert, damit Webhook-Matching zuverlässig klappt.
-    """
-    if supabase is None:
-        return False, "Supabase client not configured"
-
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+def insert_user_to_supabase(email, pwd_hash):
     data = {
-        "email": email.strip().lower(),
-        "pwd": pwd_hash,                 # <-- richtige Spalte
+        "email": email,
+        "password": pwd_hash,
         "subscription_active": False
     }
-    try:
-        res = supabase.table("users").insert(data).execute()
-        return True, res.data
-    except Exception as e:
-        return False, str(e)
+    supabase.table("users").insert([data]).execute()  # <-- WICHTIG: [data]
 
 
 # === Datei-Pfad definieren ===
@@ -73,6 +51,10 @@ def save_users(users: dict):
         USER_FILE.write_text(json.dumps(users, indent=4))
     except Exception as e:
         st.error(f"Fehler beim Speichern der Nutzerdaten: {e}")
+    
+
+def save_users(users: dict):
+    USER_FILE.write_text(json.dumps(users, indent=4))
 
 
 # 👉 Navigations-Setup (einmalig zu Beginn der Datei):
@@ -85,95 +67,18 @@ def redirect_to(page_name):
 
 view = st.query_params.get("view", "landing")
 
+# Lade .env Datei für lokale Entwicklung
+load_dotenv()
+
 # === Konfiguration ===
 st.set_page_config(page_title="InsightFundamental", layout="wide")
 
-# === Secrets sicher laden (E-Mail) ===
+# === Secrets sicher laden ===
 SMTP_SERVER = os.getenv("SMTP_SERVER")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 ABSENDER = SMTP_USER
-
-# ===== Stripe via Render-Webhook (einmalig definieren) =====
-RENDER_API_BASE = (
-    (st.secrets.get("RENDER_API_BASE") if hasattr(st, "secrets") else None)
-    or os.getenv("RENDER_API_BASE")
-    or "https://insightfundamental1-webhook-automation.onrender.com"
-).rstrip("/")  # trailing slash entfernen, damit wir sauber joinen
-
-def _post_with_retry(endpoint: str, payload: dict, attempts: int = 3, timeout: int = 30) -> str | None:
-    """
-    Robust POST (Retry + höheres Timeout). Gibt 'url' aus JSON zurück.
-    """
-    last_err = None
-    url = f"{RENDER_API_BASE}{endpoint}"
-    for i in range(attempts):
-        try:
-            resp = requests.post(url, json=payload, timeout=timeout)
-            if resp.ok:
-                try:
-                    data = resp.json() or {}
-                except Exception:
-                    data = {}
-                redirect_url = data.get("url")
-                if redirect_url:
-                    return redirect_url
-                st.error(f"Service responded without URL: {resp.text[:300]}")
-                return None
-            else:
-                last_err = f"{resp.status_code} – {resp.text[:300]}"
-        except Exception as e:
-            last_err = str(e)
-
-        # Exponential Backoff: 1.5s, 3s, 6s …
-        if i < attempts - 1:
-            time.sleep(1.5 * (2 ** i))
-
-    st.error(f"Request failed after {attempts} attempts: {last_err}")
-    return None
-
-def get_checkout_url(app_email: str) -> str | None:
-    """
-    Erstellt serverseitig eine Stripe-Checkout-Session (Render).
-    Nutzt die kurzen Aliasse beim Webhook-Service (/checkout).
-    """
-    email = (app_email or "").strip().lower()
-    if not email:
-        st.error("Missing email for checkout.")
-        return None
-    return _post_with_retry("/checkout", {"email": email})
-
-def get_portal_url(app_email: str) -> str | None:
-    """
-    Öffnet das Stripe Customer Portal (Render).
-    Nutzt die kurzen Aliasse beim Webhook-Service (/portal).
-    """
-    email = (app_email or "").strip().lower()
-    if not email:
-        st.error("Missing email for portal.")
-        return None
-    return _post_with_retry("/portal", {"email": email})
-
-# ---- Abo-Status live nachladen ----
-def refresh_subscription_status():
-    """
-    Pulls 'subscription_active' for the logged-in user from Supabase
-    and updates session: subscription_active + user_plan ('paid'|'free').
-    """
-    try:
-        state = st.session_state
-        if supabase is None or not state.get("username"):
-            return
-
-        email = state["username"].strip().lower()
-        resp = supabase.table("users").select("subscription_active").eq("email", email).execute()
-        if resp.data:
-            active = bool(resp.data[0].get("subscription_active"))
-            state.subscription_active = active
-            state.user_plan = "paid" if active else "free"
-    except Exception as e:
-        st.warning(f"Refresh error: {e}")
 
 # === Text Content (English as default) ===
 
@@ -1355,45 +1260,27 @@ if view == "login":
         forgot_clicked = st.button("Forgot your password?", key="forgot_pwd_btn")
 
         if login_clicked:
-            # Supabase-Client vorhanden?
-            if supabase is None:
-                st.error("Supabase client not configured. Please set SUPABASE_URL and SUPABASE_ANON_KEY.")
-                st.stop()
-
-            email_norm = (email or "").strip().lower()
-            pw_hash = hashlib.sha256((pwd or "").encode()).hexdigest()
-
-            if not email_norm or not pwd:
-                st.error("Please enter email and password.")
-                st.stop()
+            pw_hash = hashlib.sha256(pwd.encode()).hexdigest()
 
             try:
-                # Nur notwendige Spalten holen
-                response = supabase.table("users").select("pwd, subscription_active").eq("email", email_norm).execute()
+                response = supabase.table("users").select("*").eq("email", email).execute()
 
                 if not response.data:
                     st.error("Invalid email or password.")
-                    st.stop()
+                else:
+                    user = response.data[0]
+                    if user["pwd"] != pw_hash:
+                        st.error("Invalid email or password.")
+                    else:
+                        # ✅ Login erfolgreich
+                        SESSION.logged_in = True
+                        SESSION.username = email
 
-                user = response.data[0]
-                if user.get("pwd") != pw_hash:
-                    st.error("Invalid email or password.")
-                    st.stop()
+                        subscription_active = user.get("subscription_active", False)
+                        SESSION.subscription_active = subscription_active
+                        SESSION.user_plan = "paid" if subscription_active else "free"
 
-                # ✅ Login erfolgreich
-                SESSION.logged_in = True
-                SESSION.username = email_norm
-
-                # Setze Status aus Query (sofortige UX)
-                subscription_active = bool(user.get("subscription_active", False))
-                SESSION.subscription_active = subscription_active
-                SESSION.user_plan = "paid" if subscription_active else "free"
-
-                # 🔄 Hol den Status zusätzlich über den Helper (falls Webhook mittlerweile aktualisiert hat)
-                refresh_subscription_status()
-
-                # Weiter zur News-Seite
-                redirect_to("news")
+                        redirect_to("news")
 
             except Exception as e:
                 st.error(f"Login error: {e}")
@@ -1406,7 +1293,6 @@ if view == "login":
     st.stop()
 
 # === Registration ===
-
 if view == "register":
     st.markdown("""
     <style>
@@ -1429,15 +1315,8 @@ if view == "register":
         margin-bottom:1.2em;
         text-align:center;
     }
-    .register-card .stTextInput, .register-card .stTextInput>div, .register-card .stTextInput>div>div {
-        width: 120px !important;
-        max-width: 120px !important;
-        min-width: 60px !important;
-    }
     .register-card .stTextInput>div>div>input {
         width: 120px !important;
-        max-width: 120px !important;
-        min-width: 60px !important;
     }
     .register-card .stButton>button {
         width:100%;
@@ -1446,14 +1325,7 @@ if view == "register":
         border-radius:8px;
         margin-top:1.2em;
     }
-    .register-card label, .register-card .stCheckbox {
-        width:100%;
-        text-align:left;
-    }
-    .register-card .stCheckbox span {
-        color: #000000 !important;
-    }
-    .terms-checkbox *, .terms-checkbox label, .terms-checkbox span, .terms-checkbox div {
+    .terms-checkbox * {
         color: #000000 !important;
     }
     </style>
@@ -1478,42 +1350,50 @@ if view == "register":
             elif pwd != pwd_confirm:
                 st.error("Passwords do not match.")
             else:
-                # ✅ Nutzer in lokale JSON schreiben (falls du sie noch nutzt)
-                users = load_users()
-                email_lower = (email or "").strip().lower()
+                try:
+                    # Prüfen, ob E-Mail schon existiert
+                    existing_user = supabase.table("users").select("*").eq("email", email).execute()
+                    if existing_user.data and len(existing_user.data) > 0:
+                        st.error("This email is already registered.")
+                    else:
+                        # Passwort-Hash
+                        pwd_hash = hashlib.sha256(pwd.encode()).hexdigest()
 
-                if email_lower in users:
-                    st.error("This email is already registered.")
-                else:
-                    pwd_hash = hashlib.sha256(pwd.encode()).hexdigest()
+                        # Nutzer in Supabase speichern (mit [data] Fix)
+                        data = {
+                            "email": email,
+                            "pwd": pwd_hash,
+                            "subscription_active": False
+                        }
+                        result = supabase.table("users").insert([data]).execute()
 
-                    users[email_lower] = {
-                        "pwd": pwd_hash,
-                        "subscription_active": False
-                    }
-                    save_users(users)
+                        if result.data:
+                            SESSION.logged_in = True
+                            SESSION.username = email
+                            SESSION.user_plan = "free"
 
-                    # ✅ Supabase: Nutzer anlegen (falls noch nicht vorhanden)
-                    ok, res = insert_user_to_supabase(email_lower, pwd_hash)
-                    if not ok:
-                        st.warning(f"Supabase insert warning: {res}")
+                            st.success("Your account has been successfully created!")
 
-                    # ✅ Session setzen
-                    SESSION.logged_in = True
-                    SESSION.username = email_lower
-                    SESSION.user_plan = "free"
-
-                    st.success("Your account has been successfully created!")
-
-                    # ✅ Stripe-Checkout via Render-Service (serverseitig Session erzeugen)
-                    if st.button("Start 14-day free trial now!"):
-                        url = get_checkout_url(SESSION.username)
-                        if url:
-                            # sauberer Redirect
-                            components.html(f"<script>window.location.href='{url}';</script>", height=0)
+                            # Stripe Button anzeigen
+                            stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
+                            st.markdown(
+                                f"""
+                                <div style='margin-top: 1.5rem; text-align: center;'>
+                                    <a href="{stripe_url}" target="_blank">
+                                        <button style='padding: 0.6em 1.2em; font-size: 1.1em; border-radius: 8px; background-color: #635bff; color: white; border: none; cursor: pointer;'>
+                                            Start 14-day free trial now!
+                                        </button>
+                                    </a>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
                             st.stop()
+                        else:
+                            st.error("Unknown error: User could not be inserted into Supabase.")
 
-                    st.stop()
+                except Exception as e:
+                    st.error(f"Registration failed: {e}")
 
         st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1743,44 +1623,26 @@ def translate_text(text, target_lang):
 
 # === News-Startseite (nur für zahlende Nutzer) ===
 if view in ["news", "Alle Nachrichten"]:
-    # 1) Nur eingeloggte Nutzer
-    if not SESSION.get("logged_in"):
-        st.warning("Please sign in to continue.")
-        redirect_to("login")
-        st.stop()
-
-    # 2) Beim Betreten: Abo-Status aus Supabase ziehen (nutzt deinen Helper)
-    refresh_subscription_status()
-
-    # 3) Falls kein aktives Abo: CTA (Payment-Link mit vorbefüllter E-Mail) + Refresh anzeigen
-    if not SESSION.get("subscription_active", False):
+    # Zugriff nur für eingeloggte und zahlende Nutzer
+    if not SESSION.logged_in or SESSION.user_plan != "paid":
         st.warning("Access denied. You must start the free trial to access the News Analysis.")
-
-        c1, c2 = st.columns([1, 1])
-
-        with c1:
-            # Fester Stripe-Payment-Link
-            stripe_base = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
-
-            # App-E-Mail vorbefüllen (kleinschreiben + URL-encoden)
-            app_email = (SESSION.get("username") or "").strip().lower()
-            stripe_url = f"{stripe_base}?prefilled_email={quote(app_email)}" if app_email else stripe_base
-
-            if st.button("Start 14-day free Trial to get access"):
-                # Clientseitige Weiterleitung zu Stripe
-                components.html(f"<script>window.location.href='{stripe_url}';</script>", height=0)
-                st.stop()
-
-        with c2:
-            if st.button("Refresh access"):
-                refresh_subscription_status()
-                st.rerun()
-
+        
+        stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"  # Dein Stripe-Link
+        st.markdown(
+            f"""
+            <div style='margin-top: 1.5rem; text-align: center;'>
+                <a href="{stripe_url}" target="_blank">
+                    <button style='padding: 0.6em 1.2em; font-size: 1.1em; border-radius: 8px; background-color: #635bff; color: white; border: none; cursor: pointer;'>
+                        Start 14-day free Trial to get access
+                    </button>
+                </a>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         st.stop()
 
-    # 4) Ab hier: zahlender Nutzer → News rendern
     st.markdown("<style>.block-container {padding-top: 0.5rem !important;}</style>", unsafe_allow_html=True)
-    # ... dein bestehender News-Content ...
 
     # --- Linke Spalte: Dashboard ---
     left_col, mid_col = st.columns([1,2])
@@ -1849,9 +1711,15 @@ if view in ["news", "Alle Nachrichten"]:
             font-weight: 600;
             margin-bottom: 0.5em;
         }
-        .user-dashboard .abo-status.active { color: #1a7f3c; }
-        .user-dashboard .abo-status.cancelled { color: #b80000; }
-        .user-dashboard .abo-status.trial { color: #bfa100; }
+        .user-dashboard .abo-status.active {
+            color: #1a7f3c;
+        }
+        .user-dashboard .abo-status.cancelled {
+            color: #b80000;
+        }
+        .user-dashboard .abo-status.trial {
+            color: #bfa100;
+        }
         </style>
         """, unsafe_allow_html=True)
 
@@ -1859,7 +1727,7 @@ if view in ["news", "Alle Nachrichten"]:
 
         # --- PROFIL ---
         st.markdown(f'<h3>{get_text("profile")}</h3>', unsafe_allow_html=True)
-        user_email = st.session_state.get("username", "Unknown")
+        user_email = st.session_state.get("username", "Unbekannt")
         st.write(f"**E-Mail:** {user_email}")
         
         with st.expander(get_text("change_password")):
@@ -1878,41 +1746,23 @@ if view in ["news", "Alle Nachrichten"]:
         
         st.markdown("<hr style='margin:1.5em 0; border: none; border-top: 1.5px solid #e6f0fa;'>", unsafe_allow_html=True)
 
-        # --- ABONNEMENT / SUBSCRIPTION ---
+        # --- ABONNEMENT ---
         st.markdown(f'<h3>{get_text("subscription")}</h3>', unsafe_allow_html=True)
-
-        active = bool(SESSION.get("subscription_active", False))
-        status_text = "Active" if active else "Inactive"
-        status_class = "active" if active else "cancelled"
-        st.markdown(
-            f'<div class="abo-status {status_class}">Status: {status_text}</div>',
-            unsafe_allow_html=True
-        )
-
-        # → Portal/Trial Buttons (echte Aktionen)
-        if active:
-            # Manage subscription (Stripe Customer Portal)
-            if st.button("Manage subscription", key="dash_manage_sub"):
-                url = get_portal_url(SESSION.get("username") or "")
-                if url:
-                    components.html(f"<script>window.location.href='{url}';</script>", height=0)
-                    st.stop()
-                else:
-                    st.error("Could not open the customer portal. Please try again.")
+        abo_status = st.session_state.get("user_plan", "trial")
+        status_map = {
+            "paid": (get_text("active"), "active"),
+            "trial": (get_text("trial"), "trial"),
+            "cancelled": (get_text("cancelled"), "cancelled")
+        }
+        status_text, status_class = status_map.get(abo_status, (get_text("unknown"), ""))
+        st.markdown(f'<div class="abo-status {status_class}">{get_text("status")} {status_text}</div>', unsafe_allow_html=True)
+        
+        if abo_status != "cancelled":
+            if st.button(get_text("cancel_subscription"), key="dash_cancel_btn"):
+                st.session_state.user_plan = "cancelled"
+                st.success(get_text("subscription_cancelled"))
         else:
-            # Start Trial / Subscribe
-            if st.button("Start 14-day free trial", key="dash_start_trial"):
-                url = get_checkout_url(SESSION.get("username") or "")
-                if url:
-                    components.html(f"<script>window.location.href='{url}';</script>", height=0)
-                    st.stop()
-                else:
-                    st.error("Could not start checkout. Please try again.")
-
-            # Optional: Status nach Rückkehr schnell aktualisieren
-            if st.button("Refresh access", key="dash_refresh_access"):
-                refresh_subscription_status()
-                st.rerun()
+            st.info(get_text("subscription_already_cancelled"))
         
         st.markdown("<hr style='margin:1.5em 0; border: none; border-top: 1.5px solid #e6f0fa;'>", unsafe_allow_html=True)
 
