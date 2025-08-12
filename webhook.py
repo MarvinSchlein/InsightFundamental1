@@ -252,6 +252,23 @@ def stripe_webhook():
 
     return jsonify(ok=True), 200
 
+# --- Debug: registrierte Routen loggen & anzeigen ---
+@app.before_first_request
+def startup_log():
+    try:
+        routes = [f"{r.rule} [{','.join(sorted(r.methods))}]" for r in app.url_map.iter_rules()]
+        logging.getLogger("webhook").info("🔎 Registered routes: %s", routes)
+    except Exception as e:
+        logging.getLogger("webhook").warning("Could not list routes: %s", e)
+
+@app.route("/routes", methods=["GET"])
+def list_routes():
+    try:
+        routes = [f"{r.rule} [{','.join(sorted(r.methods))}]" for r in app.url_map.iter_rules()]
+        return jsonify(routes=routes), 200
+    except Exception as e:
+        return jsonify(error=str(e)), 500
+
 # ---------- Serverstart ----------
 if __name__ == "__main__":
     # Render setzt PORT; fallback auf 10000 (dein Service lief darauf)
