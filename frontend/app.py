@@ -1752,19 +1752,24 @@ if view in ["news", "Alle Nachrichten"]:
     # 2) Beim Betreten: Abo-Status aus Supabase ziehen (nutzt deinen Helper)
     refresh_subscription_status()
 
-    # 3) Falls kein aktives Abo: CTA (serverseitiger Checkout) + Refresh anzeigen
+    # 3) Falls kein aktives Abo: CTA (Payment-Link mit vorbefüllter E-Mail) + Refresh anzeigen
     if not SESSION.get("subscription_active", False):
         st.warning("Access denied. You must start the free trial to access the News Analysis.")
 
         c1, c2 = st.columns([1, 1])
+
         with c1:
+            # Fester Stripe-Payment-Link
+            stripe_base = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
+
+            # App-E-Mail vorbefüllen (kleinschreiben + URL-encoden)
+            app_email = (SESSION.get("username") or "").strip().lower()
+            stripe_url = f"{stripe_base}?prefilled_email={quote(app_email)}" if app_email else stripe_base
+
             if st.button("Start 14-day free Trial to get access"):
-                url = get_checkout_url(SESSION.get("username") or "")
-                if url:
-                    components.html(f"<script>window.location.href='{url}';</script>", height=0)
-                    st.stop()
-                else:
-                    st.error("Could not start checkout. Please try again.")
+                # Clientseitige Weiterleitung zu Stripe
+                components.html(f"<script>window.location.href='{stripe_url}';</script>", height=0)
+                st.stop()
 
         with c2:
             if st.button("Refresh access"):
