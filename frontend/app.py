@@ -12,6 +12,7 @@ import os
 from dotenv import load_dotenv
 from email_utils import send_reset_email
 from supabase import create_client, Client
+import time 
 
 # .env laden (lokal)
 load_dotenv()
@@ -99,47 +100,65 @@ RENDER_API_BASE = os.getenv(
     "https://insightfundamental1-webhook-automation.onrender.com"  # deine Render-Webhook-URL
 )
 
+def _post_with_retry(endpoint: str, payload: dict, attempts: int = 3, timeout: int = 30) -> str | None:
+    """
+    POST mit Retries + erhöhtem Timeout. Gibt die 'url' aus der JSON-Antwort zurück.
+    """
+    last_err = None
+    for i in range(attempts):
+        try:
+            resp = requests.post(
+                f"{RENDER_API_BASE}{endpoint}",
+                json=payload,
+                timeout=timeout,
+            )
+            if resp.ok:
+                data = {}
+                try:
+                    data = resp.json() or {}
+                except Exception:
+                    pass
+                url = data.get("url")
+                if url:
+                    return url
+                else:
+                    st.error(f"Service responded without URL: {resp.text[:200]}")
+                    return None
+            else:
+                last_err = f"{resp.status_code} – {resp.text[:200]}"
+        except Exception as e:
+            last_err = str(e)
+
+        # Exponential Backoff: 1.5s, 3s, 6s …
+        if i < attempts - 1:
+            time.sleep(1.5 * (2 ** i))
+
+    st.error(f"Request failed after {attempts} attempts: {last_err}")
+    return None
+
+
 def get_checkout_url(app_email: str) -> str | None:
     """
     Erstellt serverseitig eine Stripe-Checkout-Session über deinen Render-Service
     und gibt die Weiterleitungs-URL zurück.
     """
-    try:
-        resp = requests.post(
-            f"{RENDER_API_BASE}/create-checkout-session",
-            json={"email": (app_email or "").strip().lower()},
-            timeout=10,
-        )
-        if resp.ok:
-            data = resp.json() or {}
-            return data.get("url")
-        else:
-            st.error(f"Checkout init failed: {resp.status_code} – {resp.text}")
-            return None
-    except Exception as e:
-        st.error(f"Checkout error: {e}")
+    email = (app_email or "").strip().lower()
+    if not email:
+        st.error("Missing email for checkout.")
         return None
+    return _post_with_retry("/create-checkout-session", {"email": email})
+
 
 def get_portal_url(app_email: str) -> str | None:
     """
     Erstellt eine Stripe Customer-Portal-Session (Kündigen/Plan ändern) über deinen Render-Service
     und gibt die Weiterleitungs-URL zurück.
     """
-    try:
-        resp = requests.post(
-            f"{RENDER_API_BASE}/create-portal-session",
-            json={"email": (app_email or "").strip().lower()},
-            timeout=10,
-        )
-        if resp.ok:
-            data = resp.json() or {}
-            return data.get("url")
-        else:
-            st.error(f"Portal init failed: {resp.status_code} – {resp.text}")
-            return None
-    except Exception as e:
-        st.error(f"Portal error: {e}")
+    email = (app_email or "").strip().lower()
+    if not email:
+        st.error("Missing email for portal.")
         return None
+    return _post_with_retry("/create-portal-session", {"email": email})
 
 # ---- Abo-Status live nachladen ----
 def refresh_subscription_status():
