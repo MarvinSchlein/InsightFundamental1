@@ -93,7 +93,7 @@ SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 ABSENDER = SMTP_USER
 
-# ===== Stripe Checkout via Render-Webhook (NEU) =====
+# ===== Stripe via Render-Webhook (einmalig definieren) =====
 RENDER_API_BASE = os.getenv(
     "RENDER_API_BASE",
     "https://insightfundamental1-webhook-automation.onrender.com"  # deine Render-Webhook-URL
@@ -120,16 +120,14 @@ def get_checkout_url(app_email: str) -> str | None:
         st.error(f"Checkout error: {e}")
         return None
 
-# ===== Stripe Checkout via Render-Webhook (NEU) =====
-RENDER_API_BASE = os.getenv(
-    "RENDER_API_BASE",
-    "https://insightfundamental1-webhook-automation.onrender.com"
-)
-
-def get_checkout_url(app_email: str) -> str | None:
+def get_portal_url(app_email: str) -> str | None:
+    """
+    Erstellt eine Stripe Customer-Portal-Session (Kündigen/Plan ändern) über deinen Render-Service
+    und gibt die Weiterleitungs-URL zurück.
+    """
     try:
         resp = requests.post(
-            f"{RENDER_API_BASE}/create-checkout-session",
+            f"{RENDER_API_BASE}/create-portal-session",
             json={"email": (app_email or "").strip().lower()},
             timeout=10,
         )
@@ -137,13 +135,13 @@ def get_checkout_url(app_email: str) -> str | None:
             data = resp.json() or {}
             return data.get("url")
         else:
-            st.error(f"Checkout init failed: {resp.status_code} – {resp.text}")
+            st.error(f"Portal init failed: {resp.status_code} – {resp.text}")
             return None
     except Exception as e:
-        st.error(f"Checkout error: {e}")
+        st.error(f"Portal error: {e}")
         return None
 
-# ⬇⬇⬇ Hier einfügen ⬇⬇⬇
+# ---- Abo-Status live nachladen ----
 def refresh_subscription_status():
     """
     Pulls 'subscription_active' for the logged-in user from Supabase
