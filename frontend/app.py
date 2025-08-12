@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from email_utils import send_reset_email
 from supabase import create_client, Client
 import time
+from urllib.parse import quote
 
 # .env laden (lokal)
 load_dotenv()
