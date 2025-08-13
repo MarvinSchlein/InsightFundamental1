@@ -14,7 +14,6 @@ load_dotenv()
 from email_utils import send_reset_email
 import hashlib
 from supabase import create_client, Client
-from urllib.parse import quote
 
 # === Supabase Verbindung ===
 SUPABASE_URL = "https://hpjprbhavtewgpbjwdic.supabase.co"
@@ -1627,22 +1626,20 @@ if view in ["news", "Alle Nachrichten"]:
     # Zugriff nur für eingeloggte und zahlende Nutzer
     if not SESSION.logged_in or SESSION.user_plan != "paid":
         st.warning("Access denied. You must start the free trial to access the News Analysis.")
-
-        # ✅ Payment-Link mit vorbefüllter App-E-Mail
-        stripe_base = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"
-        app_email = (SESSION.get("username") or "").strip().lower()
-        stripe_url = f"{stripe_base}?prefilled_email={quote(app_email)}" if app_email else stripe_base
-
-        # CTA: Direkt zu Stripe weiterleiten (oder Link-Variante unten nutzen)
-        if st.button("Start 14-day free Trial to get access"):
-            components.html(f"<script>window.location.href='{stripe_url}';</script>", height=0)
-            st.stop()
-
-        # Optional: nach erfolgreichem Checkout Zugriff aktualisieren
-        if st.button("Refresh access"):
-            refresh_subscription_status()
-            st.rerun()
-
+        
+        stripe_url = "https://buy.stripe.com/eVq14m88aagx4ah3hNbAs01"  # Dein Stripe-Link
+        st.markdown(
+            f"""
+            <div style='margin-top: 1.5rem; text-align: center;'>
+                <a href="{stripe_url}" target="_blank">
+                    <button style='padding: 0.6em 1.2em; font-size: 1.1em; border-radius: 8px; background-color: #635bff; color: white; border: none; cursor: pointer;'>
+                        Start 14-day free Trial to get access
+                    </button>
+                </a>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         st.stop()
 
     st.markdown("<style>.block-container {padding-top: 0.5rem !important;}</style>", unsafe_allow_html=True)
