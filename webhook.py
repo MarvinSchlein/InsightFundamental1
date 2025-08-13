@@ -2,7 +2,7 @@ import os
 import json
 import logging
 import stripe
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, redirect
 from supabase import create_client, Client
 
 # ---------- Logging ----------
@@ -14,6 +14,8 @@ STRIPE_API_KEY = os.environ.get("STRIPE_API_KEY")
 STRIPE_WEBHOOK_SECRET = os.environ.get("STRIPE_WEBHOOK_SECRET")
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")  # Service-Role!
+# Rücksprungziel aus dem Billing-Portal (kannst du in Render als STRIPE_PORTAL_RETURN_URL setzen)
+STRIPE_PORTAL_RETURN_URL = os.environ.get("STRIPE_PORTAL_RETURN_URL") or "https://insightfundamental.streamlit.app/?view=news"
 
 if not STRIPE_API_KEY or not STRIPE_WEBHOOK_SECRET:
     raise RuntimeError("Stripe ENV missing (STRIPE_API_KEY / STRIPE_WEBHOOK_SECRET)")
@@ -63,6 +65,42 @@ def supabase_set_subscription(email: str, active: bool) -> dict:
     ).execute()
     return {"mode": "upsert", "data": upsert.data}
 
+# ---------- Health / Root ----------
+@app.route("/", methods=["GET", "HEAD"])
+def root():
+    return "ok", 200
+
+@app.route("/health", methods=["GET"])
+def health():
+    return jsonify(status="ok"), 200
+
+# ---------- NEU: GET /portal (Stripe Billing-Portal im neuen Tab) ----------
+@app.route("/portal", methods=["GET"])
+def portal_get():
+    """
+    Öffnet das Stripe Billing-Portal direkt (GET), damit das Frontend
+    einfach einen Link in neuem Tab öffnen kann.
+    ?email=<app_email>
+    """
+    email = normalize_email(request.args.get("email"))
+    if not email:
+        return "email required", 400
+
+    try:
+        customers = stripe.Customer.list(email=email, limit=1)
+        if not customers.data:
+            return "customer not found", 404
+
+        session = stripe.billing_portal.Session.create(
+            customer=customers.data[0].id,
+            return_url=STRIPE_PORTAL_RETURN_URL,
+        )
+        # Browser direkt zu Stripe umleiten
+        return redirect(session.url, code=302)
+    except Exception as e:
+        log.error("❌ portal error: %s", e, exc_info=True)
+        return "internal error", 500
+
 # ---------- Webhook ----------
 @app.route("/webhook", methods=["POST"])
 def stripe_webhook():
@@ -85,7 +123,7 @@ def stripe_webhook():
     # ========== checkout.session.completed ==========
     if etype == "checkout.session.completed":
         session = event["data"]["object"]
-        # In deinen Events ist customer_email oft null → customer_details.email verwenden
+        # In manchen Events ist customer_email null → customer_details.email verwenden
         email = normalize_email((session.get("customer_details") or {}).get("email"))
         if not email:
             # Fallback via customer_id
@@ -158,6 +196,6 @@ def stripe_webhook():
 
 # ---------- Serverstart ----------
 if __name__ == "__main__":
-    # Render setzt PORT; fallback auf 10000, weil dein Service darauf lief
+    # Render setzt PORT; fallback auf 10000
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
