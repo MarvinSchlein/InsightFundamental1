@@ -14,6 +14,7 @@ load_dotenv()
 from email_utils import send_reset_email
 import hashlib
 from supabase import create_client, Client
+from urllib.parse import quote
 
 # === Supabase Verbindung ===
 SUPABASE_URL = "https://hpjprbhavtewgpbjwdic.supabase.co"
@@ -79,6 +80,26 @@ SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
 SMTP_USER = os.getenv("SMTP_USER")
 SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
 ABSENDER = SMTP_USER
+
+
+def refresh_subscription_status():
+    """
+    Pulls 'subscription_active' for the logged-in user from Supabase
+    and updates session: subscription_active + user_plan ('paid'|'free').
+    """
+    try:
+        state = st.session_state
+        if supabase is None or not state.get("username"):
+            return
+
+        email = state["username"].strip().lower()
+        resp = supabase.table("users").select("subscription_active").eq("email", email).execute()
+        if resp.data:
+            active = bool(resp.data[0].get("subscription_active"))
+            state.subscription_active = active
+            state.user_plan = "paid" if active else "free"
+    except Exception as e:
+        st.warning(f"Refresh error: {e}")
 
 # === Text Content (English as default) ===
 
@@ -165,7 +186,10 @@ TEXTS = {
         "send": "Send",
         "fill_all_fields": "Please fill in subject and message.",
         "message_sent": "Your message has been sent successfully. We'll get back to you soon!",
-
+        "manage_subscription": "Manage subscription",
+        "refresh_access": "Refresh access",
+        "portal_open_error": "Could not open the customer portal. Please try again.",
+        
         # Status
         "active": "Active",
         "trial": "Trial",
@@ -1746,24 +1770,42 @@ if view in ["news", "Alle Nachrichten"]:
         
         st.markdown("<hr style='margin:1.5em 0; border: none; border-top: 1.5px solid #e6f0fa;'>", unsafe_allow_html=True)
 
-        # --- ABONNEMENT ---
+        # --- ABONNEMENT / SUBSCRIPTION ---
         st.markdown(f'<h3>{get_text("subscription")}</h3>', unsafe_allow_html=True)
-        abo_status = st.session_state.get("user_plan", "trial")
-        status_map = {
-            "paid": (get_text("active"), "active"),
-            "trial": (get_text("trial"), "trial"),
-            "cancelled": (get_text("cancelled"), "cancelled")
-        }
-        status_text, status_class = status_map.get(abo_status, (get_text("unknown"), ""))
-        st.markdown(f'<div class="abo-status {status_class}">{get_text("status")} {status_text}</div>', unsafe_allow_html=True)
-        
-        if abo_status != "cancelled":
-            if st.button(get_text("cancel_subscription"), key="dash_cancel_btn"):
-                st.session_state.user_plan = "cancelled"
-                st.success(get_text("subscription_cancelled"))
-        else:
-            st.info(get_text("subscription_already_cancelled"))
-        
+
+        active = bool(st.session_state.get("subscription_active", False))
+        status_text = get_text("active") if active else get_text("cancelled")
+        status_class = "active" if active else "cancelled"
+        st.markdown(
+            f'<div class="abo-status {status_class}">{get_text("status")} {status_text}</div>',
+            unsafe_allow_html=True
+        ) 
+
+        # --- Manage subscription (Stripe Billing Portal) ---
+        RENDER_API_BASE = (
+            (st.secrets.get("RENDER_API_BASE") if hasattr(st, "secrets") else None)
+            or os.getenv("RENDER_API_BASE")
+            or "https://insightfundamental1-webhook-automation.onrender.com"
+        ).rstrip("/")
+
+        app_email = (st.session_state.get("username") or "").strip().lower()
+        portal_link = f"{RENDER_API_BASE}/portal?email={quote(app_email)}"
+
+        col1, col2 = st.columns([1, 1])
+
+        with col1:
+            if st.button("Manage subscription", key="dash_manage_sub"):
+                if not app_email:
+                    st.error("No email in session.")
+                else:
+                    # Stripe-Portal in neuem Tab öffnen
+                    components.html(f"<script>window.open('{portal_link}', '_blank');</script>", height=0)
+
+        with col2:
+            if st.button("Refresh access", key="dash_refresh_access"):
+                refresh_subscription_status()
+                st.rerun()
+
         st.markdown("<hr style='margin:1.5em 0; border: none; border-top: 1.5px solid #e6f0fa;'>", unsafe_allow_html=True)
 
         # --- SUPPORT ---
