@@ -75,7 +75,9 @@ def health():
     return jsonify(status="ok"), 200
 
 # ---------- NEU: GET /portal (Stripe Billing-Portal im neuen Tab) ----------
+# Unterstützt beide Varianten: /portal UND /portal/
 @app.route("/portal", methods=["GET"])
+@app.route("/portal/", methods=["GET"])
 def portal_get():
     """
     Öffnet das Stripe Billing-Portal direkt (GET), damit das Frontend
@@ -100,6 +102,12 @@ def portal_get():
     except Exception as e:
         log.error("❌ portal error: %s", e, exc_info=True)
         return "internal error", 500
+
+# ---------- DEBUG: registrierte Routen anzeigen ----------
+@app.route("/routes", methods=["GET"])
+def list_routes():
+    routes = [f"{r.rule} [{','.join(sorted(r.methods))}]" for r in app.url_map.iter_rules()]
+    return jsonify(routes=routes), 200
 
 # ---------- Webhook ----------
 @app.route("/webhook", methods=["POST"])
