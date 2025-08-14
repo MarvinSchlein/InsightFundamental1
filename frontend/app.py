@@ -499,26 +499,6 @@ def init_session_state():
 
 init_session_state()
 
-# Placeholder functions for password reset (not implemented)
-def generate_reset_token(email: str) -> str:
-    """Generate a password reset token"""
-    return f"token_{email}_{datetime.now().timestamp()}"
-
-def send_reset_email(email: str, token: str):
-    """Send password reset email (placeholder)"""
-    pass
-
-def verify_reset_token(token: str) -> str:
-    """Verify password reset token (placeholder)"""
-    if token and token.startswith("token_"):
-        parts = token.split("_")
-        if len(parts) >= 2:
-            return parts[1]  # Return email
-    return None
-
-def delete_reset_token(token: str):
-    """Delete password reset token (placeholder)"""
-    pass
 
 # === Globales CSS inklusive Landing-Page & Dark-Sidebar ===
 
@@ -1422,9 +1402,12 @@ if view == "forgot_password":
     st.markdown("## Forgot your password?")
     st.write("Enter your email address and we'll send you a reset link.")
 
-    with st.form("forgot_form"):
-        fp_email = st.text_input("Email address", key="fp_email")
-        submitted = st.form_submit_button("Send reset link")
+    # zentriert wie vorher
+    col_l, col_c, col_r = st.columns([2, 1, 2])
+    with col_c:
+        with st.form("forgot_form", clear_on_submit=False):
+            fp_email = st.text_input("Email address", key="fp_email")
+            submitted = st.form_submit_button("Send reset link")
 
     if submitted:
         email_norm = (fp_email or "").strip().lower()
@@ -1432,36 +1415,44 @@ if view == "forgot_password":
             st.error("Please enter your email.")
             st.stop()
 
-        # Optional: prüfen, ob User existiert (ohne Enumeration anzuzeigen)
-        user_exists = False
+        # 1) Token serverseitig per RPC erzeugen (vermeidet RLS-Probleme)
         try:
-            res = supabase.table("users").select("email").eq("email", email_norm).limit(1).execute()
-            user_exists = bool(res.data)
+            rpc = supabase.rpc("request_password_reset", {"v_email": email_norm}).execute()
         except Exception:
-            # wir leaken nichts; behandeln gleich wie "erfolgreich"
-            pass
+            # Fehler nicht an den Nutzer leaken (kein roter Text)
+            rpc = None
 
-        if user_exists:
-            token = create_reset_token()
-            ok = store_reset_token(email_norm, token, ttl_hours=2)
-            if ok:
-                reset_url = build_reset_link(token)
-                # Erwartet: send_reset_email(to_email, reset_url)
-                # Falls deine Funktion andere Parameter erwartet, bitte hier anpassen.
+        # 2) Falls die RPC das Token zurückgibt, Link bauen + E-Mail senden
+        token = None
+        if rpc and getattr(rpc, "data", None):
+            row = rpc.data[0] if isinstance(rpc.data, list) else rpc.data
+            if isinstance(row, dict):
+                token = row.get("token")
+            else:
+                token = row
+
+        if token:
+            FRONTEND_BASE_URL = (
+                (st.secrets.get("FRONTEND_BASE_URL") if hasattr(st, "secrets") else None)
+                or os.getenv("FRONTEND_BASE_URL")
+                or "https://insightfundamental.streamlit.app"
+            ).rstrip("/")
+            reset_url = f"{FRONTEND_BASE_URL}/?view=reset_password&token={quote(str(token))}"
+
+            # Deine Mail-Funktion aufrufen (Signatur tolerant handhaben)
+            try:
+                send_reset_email(email_norm, reset_url)
+            except TypeError:
                 try:
-                    send_reset_email(email_norm, reset_url)
-                except TypeError:
-                    # Fallback-Implementierung falls andere Signatur:
-                    try:
-                        send_reset_email(
-                            to=email_norm,
-                            subject="Reset your InsightFundamental password",
-                            html=f"Click here to reset your password: <a href='{reset_url}'>{reset_url}</a>"
-                        )
-                    except Exception:
-                        pass
+                    send_reset_email(
+                        to=email_norm,
+                        subject="Reset your InsightFundamental password",
+                        html=f"Click here to reset your password: <a href='{reset_url}'>{reset_url}</a>"
+                    )
+                except Exception:
+                    pass
 
-        # Einheitliche Rückmeldung (kein User-Enumeration)
+        # 3) Einheitliche Rückmeldung (kein User-Enumeration)
         st.success("If an account exists for this email, a reset link has been sent.")
         st.markdown("[Back to login](/?view=login)")
         st.stop()
@@ -2296,80 +2287,8 @@ if view in ["news", "Alle Nachrichten"]:
     # --- Rechte Spalte: Filter (removed) ---
     # The right column filter section has been removed as it's no longer needed
 
-# === Passwort vergessen ===
-if view == "forgot_password":
-    st.markdown("""
-    <style>
-    .reset-card {
-        background: none !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0;
-        margin: 3rem auto 2rem auto;
-        max-width: 370px;
-        min-width: 270px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }
-    .reset-card h2 {
-        color: #0b2545;
-        font-size: 1.7em;
-        font-weight: 700;
-        margin-bottom: 1.2em;
-        text-align: center;
-    }
-    .reset-card .subtitle {
-        color: #222;
-        font-size: 1.1em;
-        margin-bottom: 1.5em;
-        text-align: center;
-        opacity: 0.85;
-    }
-    .reset-card .stTextInput,
-    .reset-card .stTextInput>div,
-    .reset-card .stTextInput>div>div {
-        width: 120px !important;
-        max-width: 120px !important;
-        min-width: 60px !important;
-    }
-    .reset-card .stTextInput>div>div>input {
-        width: 120px !important;
-        max-width: 120px !important;
-        min-width: 60px !important;
-    }
-    .reset-card .stButton>button {
-        width: 100%;
-        font-size: 1.1em;
-        padding: 0.5em 0;
-        border-radius: 8px;
-        margin-top: 1.2em;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    cols = st.columns([2, 1, 2])
-    with cols[1]:
-        st.markdown('<div class="reset-card">', unsafe_allow_html=True)
-        st.markdown(f'<h2>{get_text("reset_password")}</h2>', unsafe_allow_html=True)
-        st.markdown(f'<div class="subtitle">{get_text("reset_password_desc")}</div>', unsafe_allow_html=True)
-        
-        email = st.text_input(get_text("email"))
-        
-        if st.button(get_text("request_reset")):
-            users = json.loads(USER_FILE.read_text())
-            # Immer gleiche Meldung, um Enumeration zu verhindern
-            if email not in users:
-                st.success(get_text("reset_sent"))
-            else:
-                token = generate_reset_token(email)
-                send_reset_email(email, token)
-                st.success(get_text("reset_sent"))
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-    st.stop()
 
-# === Footer (appears on all pages) ===
+#==== Footer (appears on all pages) ===
 st.markdown("""
 <style>
 /* Footer Styling */
@@ -2860,84 +2779,3 @@ if view == "cookie-hinweis":
     st.markdown("Es werden keine Cookies auf Ihrem Gerät gespeichert oder ausgelesen, die eine Einwilligung nach § 25 Abs. 1 TTDSG erfordern würden.", unsafe_allow_html=True)
     
     st.markdown("Sollten sich künftig Änderungen ergeben (z. B. Einsatz von Analysetools), werden wir Sie rechtzeitig informieren und gegebenenfalls Ihre Zustimmung einholen.", unsafe_allow_html=True)
-
-# === Passwort zurücksetzen ===
-if view == "reset_password":
-    params = dict(st.query_params)
-    token = params.get("token", None)
-    email = verify_reset_token(token) if token else None
-    
-    if not email:
-        st.error(get_text("invalid_link"))
-        st.stop()
-    
-    st.markdown("""
-    <style>
-    .reset-card {
-        background: none !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0;
-        margin: 3rem auto 2rem auto;
-        max-width: 370px;
-        min-width: 270px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-    }
-    .reset-card h2 {
-        color: #0b2545;
-        font-size: 1.7em;
-        font-weight: 700;
-        margin-bottom: 1.2em;
-        text-align: center;
-    }
-    .reset-card .stTextInput,
-    .reset-card .stTextInput>div,
-    .reset-card .stTextInput>div>div {
-        width: 120px !important;
-        max-width: 120px !important;
-        min-width: 60px !important;
-    }
-    .reset-card .stTextInput>div>div>input {
-        width: 120px !important;
-        max-width: 120px !important;
-        min-width: 60px !important;
-    }
-    .reset-card .stButton>button {
-        width: 100%;
-        font-size: 1.1em;
-        padding: 0.5em 0;
-        border-radius: 8px;
-        margin-top: 1.2em;
-    }
-    .reset-card label {
-        width: 100%;
-        text-align: left;
-    }
-    </style>
-    """, unsafe_allow_html=True)
-    
-    cols = st.columns([2, 1, 2])
-    with cols[1]:
-        st.markdown('<div class="reset-card">', unsafe_allow_html=True)
-        st.markdown(f'<h2>{get_text("new_password")}</h2>', unsafe_allow_html=True)
-        
-        pwd1 = st.text_input(get_text("password"), type="password")
-        pwd2 = st.text_input(get_text("confirm_password"), type="password")
-        
-        if st.button(get_text("save_password")):
-            if pwd1 != pwd2:
-                st.error(get_text("passwords_dont_match"))
-            elif len(pwd1) < 6:
-                st.error(get_text("password_too_short"))
-            else:
-                users = json.loads(USER_FILE.read_text())
-                users[email] = hashlib.sha256(pwd1.encode()).hexdigest()
-                save_users(users)
-                delete_reset_token(token)
-                st.success(get_text("password_changed"))
-                st.markdown(f'<a href="/?view=login" class="button">{get_text("to_login")}</a>', unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-st.stop()
