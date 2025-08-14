@@ -1,6 +1,6 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date, timedelta
+from datetime import datetime, date, timedelta, timezone
 from pathlib import Path
 import hashlib
 import json
@@ -10,33 +10,61 @@ import numpy as np
 import requests
 import os
 from dotenv import load_dotenv
-load_dotenv()
 from email_utils import send_reset_email
-import hashlib
 from supabase import create_client, Client
+from urllib.parse import urlencode
+import secrets
 from urllib.parse import quote
+# Optional: quote, falls du es woanders brauchst
+# from urllib.parse import quote
 
-# === Supabase Verbindung ===
-SUPABASE_URL = "https://hpjprbhavtewgpbjwdic.supabase.co"
-SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwanByYmhhdnRld2dwYmp3ZGljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NTMyMzcsImV4cCI6MjA3MDIyOTIzN30.9Dk0YhonY5nT80UdRo6VtQ76jfSOXEavmjMH_FwaMvw"
+# === .env laden (lokal) ===
+load_dotenv()
 
-supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-def insert_user_to_supabase(email, pwd_hash):
-    data = {
-        "email": email,
-        "password": pwd_hash,
-        "subscription_active": False
-    }
-    supabase.table("users").insert([data]).execute()  # <-- WICHTIG: [data]
+# === Streamlit Page Config ===
+st.set_page_config(page_title="InsightFundamental", layout="wide")
 
+# === Basis-Konfiguration / Secrets ===
+SMTP_SERVER = os.getenv("SMTP_SERVER")
+SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
+SMTP_USER = os.getenv("SMTP_USER")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+ABSENDER = SMTP_USER
 
-# === Datei-Pfad definieren ===
+# Für Reset-Link (Basis-URL deiner App; z.B. Streamlit Cloud URL)
+APP_BASE_URL = (
+    (st.secrets.get("APP_BASE_URL") if hasattr(st, "secrets") else None)
+    or os.getenv("APP_BASE_URL")
+    or "https://insightfundamental.streamlit.app"
+).rstrip("/")
+
+# === Supabase-Client (Frontend NUR mit Anon Key!) ===
+SUPABASE_URL = (
+    (st.secrets.get("SUPABASE_URL") if hasattr(st, "secrets") else None)
+    or os.getenv("SUPABASE_URL")
+    or "https://hpjprbhavtewgpbjwdic.supabase.co"
+)
+
+SUPABASE_ANON_KEY = (
+    (st.secrets.get("SUPABASE_ANON_KEY") if hasattr(st, "secrets") else None)
+    or os.getenv("SUPABASE_ANON_KEY")
+    # Fallback auf deinen bisherigen Key (bitte langfristig NICHT hardcoden!)
+    or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwanByYmhhdnRld2dwYmp3ZGljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NTMyMzcsImV4cCI6MjA3MDIyOTIzN30.9Dk0YhonY5nT80UdRo6VtQ76jfSOXEavmjMH_FwaMvw"
+)
+
+supabase: Client | None = None
+try:
+    supabase = create_client(SUPABASE_URL, SUPABASE_ANON_KEY)
+except Exception as e:
+    st.warning(f"Supabase client could not be created: {e}")
+    supabase = None
+
+# === Nutzer-Datei (Altbestand; bleibt als Fallback/Debug) ===
 USER_FILE = Path("data/users.json")
 USER_FILE.parent.mkdir(parents=True, exist_ok=True)
 if not USER_FILE.exists():
     USER_FILE.write_text(json.dumps({}))  # leeres JSON schreiben
 
-# === Nutzer laden / speichern ===
 def load_users() -> dict:
     try:
         if USER_FILE.exists() and USER_FILE.read_text().strip():
@@ -52,40 +80,41 @@ def save_users(users: dict):
         USER_FILE.write_text(json.dumps(users, indent=4))
     except Exception as e:
         st.error(f"Fehler beim Speichern der Nutzerdaten: {e}")
-    
 
-def save_users(users: dict):
-    USER_FILE.write_text(json.dumps(users, indent=4))
-
-
-# 👉 Navigations-Setup (einmalig zu Beginn der Datei):
+# === Navigation ===
 if "view" not in st.session_state:
     st.session_state["view"] = "landing"
 
-def redirect_to(page_name):
+def redirect_to(page_name: str):
     st.query_params["view"] = page_name
     st.rerun()
 
 view = st.query_params.get("view", "landing")
 
-# Lade .env Datei für lokale Entwicklung
-load_dotenv()
+# === Supabase-Utils ===
+def insert_user_to_supabase(email: str, pwd_hash: str):
+    """
+    Legt den Nutzer in der Supabase-Tabelle 'users' an.
+    WICHTIG: Spalte heißt 'pwd' (nicht 'password'); Email klein schreiben.
+    """
+    if supabase is None:
+        return False, "Supabase client not configured"
 
-# === Konfiguration ===
-st.set_page_config(page_title="InsightFundamental", layout="wide")
-
-# === Secrets sicher laden ===
-SMTP_SERVER = os.getenv("SMTP_SERVER")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-SMTP_USER = os.getenv("SMTP_USER")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-ABSENDER = SMTP_USER
-
+    data = {
+        "email": email.strip().lower(),
+        "pwd": pwd_hash,
+        "subscription_active": False
+    }
+    try:
+        res = supabase.table("users").insert(data).execute()
+        return True, res.data
+    except Exception as e:
+        return False, str(e)
 
 def refresh_subscription_status():
     """
-    Pulls 'subscription_active' for the logged-in user from Supabase
-    and updates session: subscription_active + user_plan ('paid'|'free').
+    Holt 'subscription_active' des eingeloggten Nutzers aus Supabase
+    und setzt session: subscription_active + user_plan ('paid'|'free').
     """
     try:
         state = st.session_state
@@ -100,6 +129,73 @@ def refresh_subscription_status():
             state.user_plan = "paid" if active else "free"
     except Exception as e:
         st.warning(f"Refresh error: {e}")
+
+# === Forgot-Password: Helper (Supabase) ===
+def create_reset_token() -> str:
+    # URL-sicherer Token
+    return secrets.token_urlsafe(32)
+
+def store_reset_token(email: str, token: str, ttl_hours: int = 2) -> bool:
+    """
+    Speichert den Reset-Token in 'password_resets' mit Ablaufzeit.
+    Erwartete Spalten: email(text), token(text unique), expires_at(timestamptz)
+    """
+    if supabase is None:
+        return False
+    try:
+        expires = datetime.now(timezone.utc) + timedelta(hours=ttl_hours)
+        supabase.table("password_resets").insert({
+            "email": email.strip().lower(),
+            "token": token,
+            "expires_at": expires.isoformat()
+        }).execute()
+        return True
+    except Exception as e:
+        st.error(f"Could not store reset token: {e}")
+        return False
+
+def fetch_reset_by_token(token: str):
+    """
+    Liefert den Reset-Eintrag für einen Token zurück (oder None).
+    """
+    if supabase is None:
+        return None
+    try:
+        res = supabase.table("password_resets").select("*").eq("token", token).limit(1).execute()
+        if res.data:
+            return res.data[0]
+        return None
+    except Exception as e:
+        st.error(f"Could not fetch reset token: {e}")
+        return None
+
+def delete_reset_token(token: str) -> None:
+    if supabase is None:
+        return
+    try:
+        supabase.table("password_resets").delete().eq("token", token).execute()
+    except Exception:
+        pass
+
+def set_user_password(email: str, new_pwd_hash: str) -> bool:
+    """
+    Setzt das neue Passwort (Hash) in 'users.pwd' für die gegebene E-Mail.
+    """
+    if supabase is None:
+        return False
+    try:
+        res = supabase.table("users").update({"pwd": new_pwd_hash}).eq("email", email.strip().lower()).execute()
+        return bool(res.data)
+    except Exception as e:
+        st.error(f"Could not update password: {e}")
+        return False
+
+def build_reset_link(token: str) -> str:
+    """
+    Baut die Reset-URL, die in der E-Mail verschickt wird.
+    """
+    qs = urlencode({"view": "reset_password", "token": token})
+    return f"{APP_BASE_URL}/?{qs}"
 
 # === Text Content (English as default) ===
 
@@ -1209,7 +1305,6 @@ if view == "funktionen":
     """, unsafe_allow_html=True)
 
 # === Login ===
-
 if view == "login":
     st.markdown("""
     <style>
@@ -1284,27 +1379,33 @@ if view == "login":
         forgot_clicked = st.button("Forgot your password?", key="forgot_pwd_btn")
 
         if login_clicked:
+            email_norm = (email or "").strip().lower()
+            if not email_norm or not pwd:
+                st.error("Please enter email and password.")
+                st.stop()
+
             pw_hash = hashlib.sha256(pwd.encode()).hexdigest()
-
             try:
-                response = supabase.table("users").select("*").eq("email", email).execute()
-
+                # nur benötigte Spalten laden
+                response = supabase.table("users").select("pwd, subscription_active").eq("email", email_norm).execute()
                 if not response.data:
                     st.error("Invalid email or password.")
-                else:
-                    user = response.data[0]
-                    if user["pwd"] != pw_hash:
-                        st.error("Invalid email or password.")
-                    else:
-                        # ✅ Login erfolgreich
-                        SESSION.logged_in = True
-                        SESSION.username = email
+                    st.stop()
 
-                        subscription_active = user.get("subscription_active", False)
-                        SESSION.subscription_active = subscription_active
-                        SESSION.user_plan = "paid" if subscription_active else "free"
+                user = response.data[0]
+                if user.get("pwd") != pw_hash:
+                    st.error("Invalid email or password.")
+                    st.stop()
 
-                        redirect_to("news")
+                # ✅ Login erfolgreich
+                SESSION.logged_in = True
+                SESSION.username = email_norm
+
+                subscription_active = bool(user.get("subscription_active", False))
+                SESSION.subscription_active = subscription_active
+                SESSION.user_plan = "paid" if subscription_active else "free"
+
+                redirect_to("news")
 
             except Exception as e:
                 st.error(f"Login error: {e}")
@@ -1315,6 +1416,126 @@ if view == "login":
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.stop()
+
+# === Forgot Password (E-Mail anfordern) ===
+if view == "forgot_password":
+    st.markdown("## Forgot your password?")
+    st.write("Enter your email address and we'll send you a reset link.")
+
+    with st.form("forgot_form"):
+        fp_email = st.text_input("Email address", key="fp_email")
+        submitted = st.form_submit_button("Send reset link")
+
+    if submitted:
+        email_norm = (fp_email or "").strip().lower()
+        if not email_norm:
+            st.error("Please enter your email.")
+            st.stop()
+
+        # Optional: prüfen, ob User existiert (ohne Enumeration anzuzeigen)
+        user_exists = False
+        try:
+            res = supabase.table("users").select("email").eq("email", email_norm).limit(1).execute()
+            user_exists = bool(res.data)
+        except Exception:
+            # wir leaken nichts; behandeln gleich wie "erfolgreich"
+            pass
+
+        if user_exists:
+            token = create_reset_token()
+            ok = store_reset_token(email_norm, token, ttl_hours=2)
+            if ok:
+                reset_url = build_reset_link(token)
+                # Erwartet: send_reset_email(to_email, reset_url)
+                # Falls deine Funktion andere Parameter erwartet, bitte hier anpassen.
+                try:
+                    send_reset_email(email_norm, reset_url)
+                except TypeError:
+                    # Fallback-Implementierung falls andere Signatur:
+                    try:
+                        send_reset_email(
+                            to=email_norm,
+                            subject="Reset your InsightFundamental password",
+                            html=f"Click here to reset your password: <a href='{reset_url}'>{reset_url}</a>"
+                        )
+                    except Exception:
+                        pass
+
+        # Einheitliche Rückmeldung (kein User-Enumeration)
+        st.success("If an account exists for this email, a reset link has been sent.")
+        st.markdown("[Back to login](/?view=login)")
+        st.stop()
+
+# === Reset Password (über Token aus der E-Mail) ===
+if view == "reset_password":
+    token = st.query_params.get("token")
+    if not token:
+        st.error("Invalid password reset link.")
+        st.markdown("[Request a new link](/?view=forgot_password)")
+        st.stop()
+
+    entry = fetch_reset_by_token(token)
+    if not entry:
+        st.error("This reset link is invalid or has already been used.")
+        st.markdown("[Request a new link](/?view=forgot_password)")
+        st.stop()
+
+    # Ablauf prüfen
+    try:
+        exp_raw = entry.get("expires_at")
+        # robustes ISO-Parsing (Z → +00:00)
+        if isinstance(exp_raw, str):
+            exp_str = exp_raw.replace("Z", "+00:00")
+            exp_dt = datetime.fromisoformat(exp_str)
+        else:
+            exp_dt = datetime.now() - timedelta(days=1)  # sicher ablaufen lassen, falls komisch
+        if datetime.now(timezone.utc) > exp_dt:
+            st.error("This reset link has expired.")
+            st.markdown("[Request a new link](/?view=forgot_password)")
+            # verbrauchten Token entfernen
+            delete_reset_token(token)
+            st.stop()
+    except Exception:
+        # Wenn Parsing schiefgeht: sicherheitshalber als abgelaufen behandeln
+        st.error("This reset link is invalid or expired.")
+        st.markdown("[Request a new link](/?view=forgot_password)")
+        delete_reset_token(token)
+        st.stop()
+
+    st.markdown("## Set a new password")
+    with st.form("reset_form"):
+        p1 = st.text_input("New password", type="password", key="rp1")
+        p2 = st.text_input("Confirm new password", type="password", key="rp2")
+        submit_new = st.form_submit_button("Save new password")
+
+    if submit_new:
+        if not p1 or not p2:
+            st.error("Please fill both fields.")
+            st.stop()
+        if p1 != p2:
+            st.error("Passwords do not match.")
+            st.stop()
+        if len(p1) < 6:
+            st.error("Password must be at least 6 characters.")
+            st.stop()
+
+        email_norm = (entry.get("email") or "").strip().lower()
+        if not email_norm:
+            st.error("Internal error: no email bound to token.")
+            st.stop()
+
+        new_hash = hashlib.sha256(p1.encode()).hexdigest()
+        ok = set_user_password(email_norm, new_hash)
+        if not ok:
+            st.error("Could not update password. Please try again.")
+            st.stop()
+
+        # Token verbrauchen
+        delete_reset_token(token)
+
+        st.success("Your password has been updated. You can now sign in.")
+        st.markdown("[Back to login](/?view=login)")
+        st.stop()
 
 # === Registration ===
 if view == "register":
