@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from supabase import create_client, Client
 from urllib.parse import urlencode
 import secrets
-from urllib.parse import quote
+from urllib.parse import quote, unquote
 # Optional: quote, falls du es woanders brauchst
 # from urllib.parse import quote
 
@@ -1454,60 +1454,74 @@ if view == "forgot_password":
 
 import requests
 
-# === Reset Password (Supabase Auth: Token prüfen + Passwort setzen) ===
+# === Reset Password (Supabase Auth: verify + set new password) ===
 if view == "reset_password":
-    st.markdown("## Choose a new password")
+    from urllib.parse import unquote
 
-    # Token & Email aus der Reset-Mail
+    # Werte aus dem Link in der E-Mail:
     token_hash = st.query_params.get("token_hash")
-    email_q = (st.query_params.get("email") or "").strip().lower()
+    email_param = st.query_params.get("email")
+    email_norm = (unquote(email_param) if email_param else "").strip().lower()
 
-    if not token_hash or not email_q:
-        st.error("Invalid or missing reset link. Please request a new one.")
+    st.markdown("## Choose a new password")
+    p1 = st.text_input("New password", type="password", key="rp1")
+    p2 = st.text_input("Confirm new password", type="password", key="rp2")
+    submit = st.button("Set new password")
+
+    def fail(msg="Reset failed. The link may be invalid or expired. Please request a new reset link."):
+        st.error(msg)
         st.markdown("[Back to login](/?view=login)")
         st.stop()
 
-    with st.form("reset_pw_form"):
-        new1 = st.text_input("New password", type="password")
-        new2 = st.text_input("Confirm new password", type="password")
-        submitted = st.form_submit_button("Set new password")
-
-    if submitted:
-        if not new1 or not new2:
-            st.error("Please fill in both password fields.")
-            st.stop()
-        if new1 != new2:
-            st.error("Passwords do not match.")
-            st.stop()
-        if len(new1) < 6:
-            st.error("Password must be at least 6 characters.")
+    if submit:
+        # Grundchecks
+        if not token_hash or not email_norm:
+            fail()
+        if not p1 or p1 != p2:
+            st.error("Passwords don't match.")
             st.stop()
 
         try:
-            # 1) Recovery-Token verifizieren (erstellt eine temporäre Session)
-            supabase.auth.verify_otp({
-                "email": email_q,
-                "type": "recovery",
-                "token_hash": token_hash,
-            })
+            # 1) Token verifizieren -> gibt Session (access_token) zurück
+            headers = {
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type": "application/json",
+            }
+            v = requests.post(
+                f"{SUPABASE_URL}/auth/v1/verify",
+                headers=headers,
+                json={"type": "recovery", "token_hash": token_hash, "email": email_norm},
+                timeout=15,
+            )
+            if v.status_code not in (200, 201):
+                fail()
 
-            # 2) Passwort in Supabase Auth aktualisieren
-            supabase.auth.update_user({"password": new1})
+            access_token = (v.json() or {}).get("access_token")
+            if not access_token:
+                fail()
 
-            # 3) Optional: aus ggf. vorhandener (temporärer) Session abmelden
-            try:
-                supabase.auth.sign_out()
-            except Exception:
-                pass
+            # 2) Mit der verifizierten Session das Passwort setzen
+            headers2 = {
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            }
+            upd = requests.put(
+                f"{SUPABASE_URL}/auth/v1/user",
+                headers=headers2,
+                json={"password": p1},
+                timeout=15,
+            )
+            if upd.status_code not in (200, 201):
+                fail()
 
-            st.success("Password updated. Please log in.")
-            st.markdown("[Go to login](/?view=login)")
+            st.success("Password updated. You can now log in.")
+            st.markdown("[Back to login](/?view=login)")
             st.stop()
 
         except Exception:
-            st.error("Reset failed. The link may be invalid or expired. Please request a new reset link.")
-            st.markdown("[Back to login](/?view=login)")
-            st.stop()
+            fail()
 
 # === Registration ===
 if view == "register":
