@@ -1454,74 +1454,71 @@ if view == "forgot_password":
 
 import requests
 
-# === Reset Password (Supabase Auth: verify + set new password) ===
+# === Reset Password (Supabase Auth) ===
 if view == "reset_password":
-    from urllib.parse import unquote
-
-    # Werte aus dem Link in der E-Mail:
-    token_hash = st.query_params.get("token_hash")
-    email_param = st.query_params.get("email")
-    email_norm = (unquote(email_param) if email_param else "").strip().lower()
-
     st.markdown("## Choose a new password")
-    p1 = st.text_input("New password", type="password", key="rp1")
-    p2 = st.text_input("Confirm new password", type="password", key="rp2")
+
+    # Token aus URL nehmen (Fallback: 'token', falls Template alt ist)
+    token_hash = st.query_params.get("token_hash") or st.query_params.get("token") or ""
+    email_hint = st.query_params.get("email", "")
+
+    pw1 = st.text_input("New password", type="password")
+    pw2 = st.text_input("Confirm new password", type="password")
     submit = st.button("Set new password")
 
-    def fail(msg="Reset failed. The link may be invalid or expired. Please request a new reset link."):
-        st.error(msg)
-        st.markdown("[Back to login](/?view=login)")
-        st.stop()
-
     if submit:
-        # Grundchecks
-        if not token_hash or not email_norm:
-            fail()
-        if not p1 or p1 != p2:
-            st.error("Passwords don't match.")
+        if not token_hash:
+            st.error("Reset failed. The link is missing or invalid. Please request a new reset link.")
+            st.stop()
+        if pw1 != pw2 or len(pw1) < 6:
+            st.error("Passwords must match and be at least 6 characters.")
             st.stop()
 
         try:
-            # 1) Token verifizieren -> gibt Session (access_token) zurück
-            headers = {
-                "apikey": SUPABASE_KEY,
-                "Authorization": f"Bearer {SUPABASE_KEY}",
-                "Content-Type": "application/json",
-            }
+            import requests
+
+            # 1) Token verifizieren -> Session-Access-Token bekommen
+            verify_url = f"{SUPABASE_URL}/auth/v1/verify"
             v = requests.post(
-                f"{SUPABASE_URL}/auth/v1/verify",
-                headers=headers,
-                json={"type": "recovery", "token_hash": token_hash, "email": email_norm},
+                verify_url,
+                headers={
+                    "apikey": SUPABASE_KEY,
+                    "Authorization": f"Bearer {SUPABASE_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={"type": "recovery", "token_hash": token_hash},
                 timeout=15,
             )
-            if v.status_code not in (200, 201):
-                fail()
+            if v.status_code != 200:
+                st.error("Reset failed. The link may be invalid or expired. Please request a new reset link.")
+                st.stop()
 
-            access_token = (v.json() or {}).get("access_token")
+            access_token = v.json().get("access_token")
             if not access_token:
-                fail()
+                st.error("Reset failed (no access token). Please request a new reset link.")
+                st.stop()
 
-            # 2) Mit der verifizierten Session das Passwort setzen
-            headers2 = {
-                "apikey": SUPABASE_KEY,
-                "Authorization": f"Bearer {access_token}",
-                "Content-Type": "application/json",
-            }
-            upd = requests.put(
-                f"{SUPABASE_URL}/auth/v1/user",
-                headers=headers2,
-                json={"password": p1},
+            # 2) Passwort setzen – mit dem Access-Token aus Schritt 1
+            user_url = f"{SUPABASE_URL}/auth/v1/user"
+            u = requests.put(
+                user_url,
+                headers={
+                    "Authorization": f"Bearer {access_token}",  # WICHTIG: NICHT der anon key!
+                    "apikey": SUPABASE_KEY,
+                    "Content-Type": "application/json",
+                },
+                json={"password": pw1},
                 timeout=15,
             )
-            if upd.status_code not in (200, 201):
-                fail()
 
-            st.success("Password updated. You can now log in.")
-            st.markdown("[Back to login](/?view=login)")
-            st.stop()
+            if u.status_code == 200:
+                st.success("Password updated. You can now log in.")
+                st.markdown("[Back to login](/?view=login)")
+            else:
+                st.error("Could not set password. Please request a new reset link and try again.")
 
         except Exception:
-            fail()
+            st.error("Unexpected error. Please request a new reset link and try again.")
 
 # === Registration ===
 if view == "register":
