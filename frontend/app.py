@@ -1435,71 +1435,75 @@ if view == "forgot_password":
         st.markdown("[Back to login](/?view=login)")
         st.stop()
 
-# === Reset Password (Link aus E-Mail öffnet diese Seite) ===
+# === Reset Password (Seite aus der E-Mail) ===
 if view == "reset_password":
-    token_hash = st.query_params.get("token_hash", "")
-    email_hint = st.query_params.get("email", "")
+    import requests
 
-    st.markdown("## Set a new password")
-    if not token_hash:
+    token_hash = st.query_params.get("token_hash")
+    email_qs   = st.query_params.get("email")
+
+    st.markdown("## Choose a new password")
+
+    if not token_hash or not email_qs:
         st.error("Invalid or missing reset link. Please request a new one.")
-        st.markdown("[Request a new link](/?view=forgot_password)")
         st.stop()
 
-    with st.form("reset_form"):
-        st.text_input("Email", value=email_hint, disabled=True)
-        new1 = st.text_input("New password", type="password")
-        new2 = st.text_input("Confirm new password", type="password")
-        submitted = st.form_submit_button("Update password")
+    # 1) Token verifizieren -> Session erhalten
+    VERIFY_URL = f"{SUPABASE_URL}/auth/v1/verify"
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+    }
+    vr = requests.post(
+        VERIFY_URL,
+        headers=headers,
+        json={"type": "recovery", "token_hash": token_hash, "email": email_qs},
+        timeout=15,
+    )
+    if vr.status_code not in (200, 201):
+        st.error("This reset link is invalid or has expired. Please request a new one.")
+        st.stop()
 
-    if submitted:
-        if not new1 or new1 != new2:
-            st.error("Passwords do not match.")
-            st.stop()
-        if len(new1) < 6:
-            st.error("Password is too short (min 6 chars).")
+    session = vr.json()
+    access_token = session.get("access_token")
+    if not access_token:
+        st.error("Could not establish session from reset link.")
+        st.stop()
+
+    # 2) Neues Passwort erfassen
+    with st.form("set_new_pwd"):
+        p1 = st.text_input("New password", type="password")
+        p2 = st.text_input("Confirm new password", type="password")
+        submit = st.form_submit_button("Set new password")
+
+    if submit:
+        if not p1 or p1 != p2 or len(p1) < 6:
+            st.error("Passwords must match and be at least 6 characters.")
             st.stop()
 
-        import requests
-        headers_base = {
-            "apikey": SUPABASE_KEY,                 # anon key
+        # 3) Passwort in Supabase Auth setzen
+        UPDATE_URL = f"{SUPABASE_URL}/auth/v1/user"
+        upd_headers = {
+            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {access_token}",  # aus Schritt 1
             "Content-Type": "application/json",
         }
+        ur = requests.put(UPDATE_URL, headers=upd_headers, json={"password": p1}, timeout=15)
 
-        try:
-            # 1) token_hash verifizieren => Session holen
-            verify_url = f"{SUPABASE_URL}/auth/v1/verify"
-            params = {"type": "recovery", "token_hash": token_hash}
-            r = requests.post(verify_url, headers={**headers_base, "Authorization": f"Bearer {SUPABASE_KEY}"}, params=params, timeout=15)
-            if r.status_code not in (200, 201):
-                st.error("Reset link is invalid or expired. Please request a new one.")
-                st.stop()
+        if ur.status_code in (200, 201):
+            # 4) Optional: dein eigenes users-Table aktualisieren (falls du es weiter nutzt)
+            try:
+                new_hash = hashlib.sha256(p1.encode()).hexdigest()
+                supabase.table("users").update({"pwd": new_hash}).eq("email", email_qs.lower().strip()).execute()
+            except Exception:
+                pass
 
-            data = r.json()
-            access_token = (data.get("access_token")
-                            or data.get("session", {}).get("access_token"))
-            if not access_token:
-                st.error("Could not establish a session from the reset link.")
-                st.stop()
-
-            # 2) Neues Passwort setzen (mit Bearer User-Token)
-            update_url = f"{SUPABASE_URL}/auth/v1/user"
-            headers_user = {
-                **headers_base,
-                "Authorization": f"Bearer {access_token}",
-            }
-            r2 = requests.put(update_url, headers=headers_user, json={"password": new1}, timeout=15)
-            if r2.status_code not in (200, 201):
-                st.error("Could not update password. Please request a new link.")
-                st.stop()
-
-            st.success("Your password has been updated. You can now log in.")
+            st.success("Password updated. You can now log in with your new password.")
             st.markdown("[Back to login](/?view=login)")
             st.stop()
-
-        except Exception as e:
-            st.error("Unexpected error while updating your password. Please request a new link.")
-            st.stop()
+        else:
+            st.error("Could not update password. Please try again.")
 
 # === Registration ===
 if view == "register":
