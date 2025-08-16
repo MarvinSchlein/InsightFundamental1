@@ -1380,31 +1380,31 @@ if view == "login":
                 st.error("Please enter email and password.")
                 st.stop()
 
-            pw_hash = hashlib.sha256(pwd.encode()).hexdigest()
             try:
-                # nur benötigte Spalten laden
-                response = supabase.table("users").select("pwd, subscription_active").eq("email", email_norm).execute()
-                if not response.data:
-                    st.error("Invalid email or password.")
-                    st.stop()
+                # 🔐 Supabase Auth: statt eigener Hash-Prüfung
+                auth_res = supabase.auth.sign_in_with_password({
+                    "email": email_norm,
+                    "password": pwd,
+                })
 
-                user = response.data[0]
-                if user.get("pwd") != pw_hash:
+                # Kein User => falsche Credentials
+                if not getattr(auth_res, "user", None):
                     st.error("Invalid email or password.")
                     st.stop()
 
                 # ✅ Login erfolgreich
                 SESSION.logged_in = True
                 SESSION.username = email_norm
+                SESSION.keep_logged_in = bool(keep_logged_in)
 
-                subscription_active = bool(user.get("subscription_active", False))
-                SESSION.subscription_active = subscription_active
-                SESSION.user_plan = "paid" if subscription_active else "free"
+                # Abo-Status weiterhin aus deiner users-Tabelle lesen
+                refresh_subscription_status()
 
                 redirect_to("news")
 
-            except Exception as e:
-                st.error(f"Login error: {e}")
+            except Exception:
+                # Keine Details leaken
+                st.error("Invalid email or password.")
 
         if forgot_clicked:
             redirect_to("forgot_password")
