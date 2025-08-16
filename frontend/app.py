@@ -1454,61 +1454,59 @@ if view == "forgot_password":
 
 import requests
 
-# === Reset Password (Landing vom E-Mail-Link) ===
+# === Reset Password (Supabase Auth: Token prüfen + Passwort setzen) ===
 if view == "reset_password":
-    token_hash = st.query_params.get("token_hash", "")
-    email_arg  = st.query_params.get("email", "")
-
     st.markdown("## Choose a new password")
-    if not token_hash:
-        st.error("Recovery link is invalid or expired. Please request a new one.")
+
+    # Token & Email aus der Reset-Mail
+    token_hash = st.query_params.get("token_hash")
+    email_q = (st.query_params.get("email") or "").strip().lower()
+
+    if not token_hash or not email_q:
+        st.error("Invalid or missing reset link. Please request a new one.")
+        st.markdown("[Back to login](/?view=login)")
         st.stop()
 
-    pw1 = st.text_input("New password", type="password")
-    pw2 = st.text_input("Repeat password", type="password")
-    if st.button("Set new password"):
-        if pw1 != pw2:
-            st.error("Passwords do not match."); st.stop()
-        if len(pw1) < 8:
-            st.error("Please use at least 8 characters."); st.stop()
+    with st.form("reset_pw_form"):
+        new1 = st.text_input("New password", type="password")
+        new2 = st.text_input("Confirm new password", type="password")
+        submitted = st.form_submit_button("Set new password")
 
-        # 1) token_hash verifizieren -> Session/Access Token holen
-        verify_url = f"{SUPABASE_URL}/auth/v1/verify"
-        headers    = {
-            "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {SUPABASE_KEY}",
-            "Content-Type": "application/json",
-        }
-        r = requests.post(verify_url, headers=headers,
-                          json={"type": "recovery", "token_hash": token_hash}, timeout=15)
-
-        if r.status_code not in (200, 201):
-            st.error("Recovery link invalid or expired. Please request a new one.")
+    if submitted:
+        if not new1 or not new2:
+            st.error("Please fill in both password fields.")
+            st.stop()
+        if new1 != new2:
+            st.error("Passwords do not match.")
+            st.stop()
+        if len(new1) < 6:
+            st.error("Password must be at least 6 characters.")
             st.stop()
 
-        data = r.json() if r.text else {}
-        access_token = (
-            data.get("access_token")
-            or (data.get("session") or {}).get("access_token")
-        )
-        if not access_token:
-            st.error("Could not create a session from recovery link."); st.stop()
+        try:
+            # 1) Recovery-Token verifizieren (erstellt eine temporäre Session)
+            supabase.auth.verify_otp({
+                "email": email_q,
+                "type": "recovery",
+                "token_hash": token_hash,
+            })
 
-        # 2) Password setzen mit dem erhaltenen Access Token
-        update_url = f"{SUPABASE_URL}/auth/v1/user"
-        upd_headers = {
-            "apikey": SUPABASE_KEY,
-            "Authorization": f"Bearer {access_token}",
-            "Content-Type": "application/json",
-        }
-        u = requests.put(update_url, headers=upd_headers, json={"password": pw1}, timeout=15)
+            # 2) Passwort in Supabase Auth aktualisieren
+            supabase.auth.update_user({"password": new1})
 
-        if u.status_code in (200, 201):
-            st.success("Password updated. You can now log in.")
+            # 3) Optional: aus ggf. vorhandener (temporärer) Session abmelden
+            try:
+                supabase.auth.sign_out()
+            except Exception:
+                pass
+
+            st.success("Password updated. Please log in.")
+            st.markdown("[Go to login](/?view=login)")
+            st.stop()
+
+        except Exception:
+            st.error("Reset failed. The link may be invalid or expired. Please request a new reset link.")
             st.markdown("[Back to login](/?view=login)")
-            st.stop()
-        else:
-            st.error("Could not update password. Please request a new link and try again.")
             st.stop()
 
 # === Registration ===
