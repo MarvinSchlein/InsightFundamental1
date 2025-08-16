@@ -10,7 +10,6 @@ import numpy as np
 import requests
 import os
 from dotenv import load_dotenv
-from email_utils import send_reset_email
 from supabase import create_client, Client
 from urllib.parse import urlencode
 import secrets
@@ -1397,17 +1396,14 @@ if view == "login":
 
     st.stop()
 
-# === Forgot Password (E-Mail anfordern) ===
+# === Forgot Password (Supabase Auth: E-Mail anfordern) ===
 if view == "forgot_password":
     st.markdown("## Forgot your password?")
     st.write("Enter your email address and we'll send you a reset link.")
 
-    # zentriert wie vorher
-    col_l, col_c, col_r = st.columns([2, 1, 2])
-    with col_c:
-        with st.form("forgot_form", clear_on_submit=False):
-            fp_email = st.text_input("Email address", key="fp_email")
-            submitted = st.form_submit_button("Send reset link")
+    with st.form("forgot_form"):
+        fp_email = st.text_input("Email address", key="fp_email")
+        submitted = st.form_submit_button("Send reset link")
 
     if submitted:
         email_norm = (fp_email or "").strip().lower()
@@ -1415,118 +1411,95 @@ if view == "forgot_password":
             st.error("Please enter your email.")
             st.stop()
 
-        # 1) Token serverseitig per RPC erzeugen (vermeidet RLS-Probleme)
+        # Supabase Auth: /auth/v1/recover – Link und Mail kommen von Supabase
         try:
-            rpc = supabase.rpc("request_password_reset", {"v_email": email_norm}).execute()
-        except Exception:
-            # Fehler nicht an den Nutzer leaken (kein roter Text)
-            rpc = None
-
-        # 2) Falls die RPC das Token zurückgibt, Link bauen + E-Mail senden
-        token = None
-        if rpc and getattr(rpc, "data", None):
-            row = rpc.data[0] if isinstance(rpc.data, list) else rpc.data
-            if isinstance(row, dict):
-                token = row.get("token")
+            import requests
+            RECOVER_URL = f"{SUPABASE_URL}/auth/v1/recover"
+            headers = {
+                "apikey": SUPABASE_KEY,                 # dein anon key
+                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "Content-Type": "application/json",
+            }
+            # redirect_to optional – wir nutzen primär den Link aus der E-Mail-Vorlage
+            params = {"redirect_to": "https://insightfundamental.streamlit.app/?view=reset_password"}
+            r = requests.post(RECOVER_URL, headers=headers, json={"email": email_norm}, params=params, timeout=15)
+            if r.status_code in (200, 204):
+                st.success("If an account exists for this email, a reset link has been sent.")
             else:
-                token = row
+                # keine Details leaken
+                st.success("If an account exists for this email, a reset link has been sent.")
+        except Exception as e:
+            # aus Sicherheitsgründen auch hier Erfolgstext
+            st.success("If an account exists for this email, a reset link has been sent.")
 
-        if token:
-            FRONTEND_BASE_URL = (
-                (st.secrets.get("FRONTEND_BASE_URL") if hasattr(st, "secrets") else None)
-                or os.getenv("FRONTEND_BASE_URL")
-                or "https://insightfundamental.streamlit.app"
-            ).rstrip("/")
-            reset_url = f"{FRONTEND_BASE_URL}/?view=reset_password&token={quote(str(token))}"
-
-            # Deine Mail-Funktion aufrufen (Signatur tolerant handhaben)
-            try:
-                send_reset_email(email_norm, reset_url)
-            except TypeError:
-                try:
-                    send_reset_email(
-                        to=email_norm,
-                        subject="Reset your InsightFundamental password",
-                        html=f"Click here to reset your password: <a href='{reset_url}'>{reset_url}</a>"
-                    )
-                except Exception:
-                    pass
-
-        # 3) Einheitliche Rückmeldung (kein User-Enumeration)
-        st.success("If an account exists for this email, a reset link has been sent.")
         st.markdown("[Back to login](/?view=login)")
         st.stop()
 
-# === Reset Password (über Token aus der E-Mail) ===
+# === Reset Password (Link aus E-Mail öffnet diese Seite) ===
 if view == "reset_password":
-    token = st.query_params.get("token")
-    if not token:
-        st.error("Invalid password reset link.")
-        st.markdown("[Request a new link](/?view=forgot_password)")
-        st.stop()
-
-    entry = fetch_reset_by_token(token)
-    if not entry:
-        st.error("This reset link is invalid or has already been used.")
-        st.markdown("[Request a new link](/?view=forgot_password)")
-        st.stop()
-
-    # Ablauf prüfen
-    try:
-        exp_raw = entry.get("expires_at")
-        # robustes ISO-Parsing (Z → +00:00)
-        if isinstance(exp_raw, str):
-            exp_str = exp_raw.replace("Z", "+00:00")
-            exp_dt = datetime.fromisoformat(exp_str)
-        else:
-            exp_dt = datetime.now() - timedelta(days=1)  # sicher ablaufen lassen, falls komisch
-        if datetime.now(timezone.utc) > exp_dt:
-            st.error("This reset link has expired.")
-            st.markdown("[Request a new link](/?view=forgot_password)")
-            # verbrauchten Token entfernen
-            delete_reset_token(token)
-            st.stop()
-    except Exception:
-        # Wenn Parsing schiefgeht: sicherheitshalber als abgelaufen behandeln
-        st.error("This reset link is invalid or expired.")
-        st.markdown("[Request a new link](/?view=forgot_password)")
-        delete_reset_token(token)
-        st.stop()
+    token_hash = st.query_params.get("token_hash", "")
+    email_hint = st.query_params.get("email", "")
 
     st.markdown("## Set a new password")
-    with st.form("reset_form"):
-        p1 = st.text_input("New password", type="password", key="rp1")
-        p2 = st.text_input("Confirm new password", type="password", key="rp2")
-        submit_new = st.form_submit_button("Save new password")
+    if not token_hash:
+        st.error("Invalid or missing reset link. Please request a new one.")
+        st.markdown("[Request a new link](/?view=forgot_password)")
+        st.stop()
 
-    if submit_new:
-        if not p1 or not p2:
-            st.error("Please fill both fields.")
-            st.stop()
-        if p1 != p2:
+    with st.form("reset_form"):
+        st.text_input("Email", value=email_hint, disabled=True)
+        new1 = st.text_input("New password", type="password")
+        new2 = st.text_input("Confirm new password", type="password")
+        submitted = st.form_submit_button("Update password")
+
+    if submitted:
+        if not new1 or new1 != new2:
             st.error("Passwords do not match.")
             st.stop()
-        if len(p1) < 6:
-            st.error("Password must be at least 6 characters.")
+        if len(new1) < 6:
+            st.error("Password is too short (min 6 chars).")
             st.stop()
 
-        email_norm = (entry.get("email") or "").strip().lower()
-        if not email_norm:
-            st.error("Internal error: no email bound to token.")
+        import requests
+        headers_base = {
+            "apikey": SUPABASE_KEY,                 # anon key
+            "Content-Type": "application/json",
+        }
+
+        try:
+            # 1) token_hash verifizieren => Session holen
+            verify_url = f"{SUPABASE_URL}/auth/v1/verify"
+            params = {"type": "recovery", "token_hash": token_hash}
+            r = requests.post(verify_url, headers={**headers_base, "Authorization": f"Bearer {SUPABASE_KEY}"}, params=params, timeout=15)
+            if r.status_code not in (200, 201):
+                st.error("Reset link is invalid or expired. Please request a new one.")
+                st.stop()
+
+            data = r.json()
+            access_token = (data.get("access_token")
+                            or data.get("session", {}).get("access_token"))
+            if not access_token:
+                st.error("Could not establish a session from the reset link.")
+                st.stop()
+
+            # 2) Neues Passwort setzen (mit Bearer User-Token)
+            update_url = f"{SUPABASE_URL}/auth/v1/user"
+            headers_user = {
+                **headers_base,
+                "Authorization": f"Bearer {access_token}",
+            }
+            r2 = requests.put(update_url, headers=headers_user, json={"password": new1}, timeout=15)
+            if r2.status_code not in (200, 201):
+                st.error("Could not update password. Please request a new link.")
+                st.stop()
+
+            st.success("Your password has been updated. You can now log in.")
+            st.markdown("[Back to login](/?view=login)")
             st.stop()
 
-        new_hash = hashlib.sha256(p1.encode()).hexdigest()
-        ok = set_user_password(email_norm, new_hash)
-        if not ok:
-            st.error("Could not update password. Please try again.")
+        except Exception as e:
+            st.error("Unexpected error while updating your password. Please request a new link.")
             st.stop()
-
-        # Token verbrauchen
-        delete_reset_token(token)
-
-        st.success("Your password has been updated. You can now sign in.")
-        st.markdown("[Back to login](/?view=login)")
-        st.stop()
 
 # === Registration ===
 if view == "register":
