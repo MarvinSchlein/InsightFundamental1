@@ -1340,20 +1340,11 @@ if view == "login":
         border-radius:8px;
         margin-top:1.2em;
     }
-    .login-card label, .login-card .stCheckbox {
-        width:100%;
-        text-align:left;
-    }
-    .login-card .stCheckbox span {
-        color: #000000 !important;
-    }
-    .stay-checkbox .stCheckbox span {
-        color: #000000 !important;
-    }
-    .stay-checkbox *, .stay-checkbox label, .stay-checkbox span, .stay-checkbox div {
-        color: #000000 !important;
-    }
-    .login-card .stCheckbox *, .login-card .stCheckbox label, .login-card .stCheckbox span {
+    .login-card label, .login-card .stCheckbox { width:100%; text-align:left; }
+    .login-card .stCheckbox span,
+    .stay-checkbox .stCheckbox span,
+    .stay-checkbox *, .login-card .stCheckbox *,
+    .login-card .stCheckbox label, .login-card .stCheckbox span {
         color: #000000 !important;
     }
     </style>
@@ -1365,13 +1356,14 @@ if view == "login":
         st.markdown('<h2>Sign in to your account</h2>', unsafe_allow_html=True)
 
         email = st.text_input("Email", key="login_email")
-        pwd = st.text_input("Password", type="password", key="login_pwd")
+        pwd   = st.text_input("Password", type="password", key="login_pwd")
 
+        # WICHTIG: eigener Widget-Key, NICHT "keep_logged_in"
         st.markdown('<div class="stay-checkbox">', unsafe_allow_html=True)
-        keep_logged_in = st.checkbox("Keep me signed in", key="keep_logged_in")
+        keep_me = st.checkbox("Keep me signed in", key="keep_me_input")  # CHANGED
         st.markdown('</div>', unsafe_allow_html=True)
 
-        login_clicked = st.button("Log in")
+        login_clicked  = st.button("Log in")
         forgot_clicked = st.button("Forgot your password?", key="forgot_pwd_btn")
 
         if login_clicked:
@@ -1380,13 +1372,11 @@ if view == "login":
                 st.error("Please enter email and password.")
                 st.stop()
 
-            # Vorübergehend aktiv lassen, um Server-Fehler schnell zu sehen.
-            # Später auf False stellen.
-            DEBUG_AUTH = True
+            DEBUG_AUTH = True  # optional: später auf False
 
             access_token = None
 
-            # 1) Versuch: Supabase-Python-SDK
+            # 1) Supabase-Python-SDK
             sdk_error = None
             try:
                 auth_res = supabase.auth.sign_in_with_password({
@@ -1418,17 +1408,16 @@ if view == "login":
                         st.info(f"/token exception: {e}")
 
             if not access_token:
-                # Keine Details leaken
                 st.error("Invalid email or password.")
                 st.stop()
 
-            # ✅ Login erfolgreich
-            SESSION.logged_in = True
-            SESSION.username = email_norm
-            SESSION.keep_logged_in = bool(keep_logged_in)
-            SESSION.supabase_token = access_token  # optional, kann hilfreich sein
+            # ✅ Login erfolgreich (KEINE Session-Key-Kollision mit Widget)
+            SESSION.logged_in       = True
+            SESSION.username        = email_norm
+            SESSION.keep_signed_in  = bool(keep_me)      # CHANGED (neuer Session-Key)
+            SESSION.supabase_token  = access_token       # optional
 
-            # Abo-Status aus deiner users-Tabelle nachziehen
+            # Abo-Status aus users-Tabelle ziehen
             refresh_subscription_status()
 
             redirect_to("news")
