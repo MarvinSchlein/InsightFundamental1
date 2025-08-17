@@ -1516,96 +1516,77 @@ if view == "forgot_password":
         st.markdown("[Back to login](/?view=login)")
         st.stop()
 
-# === Reset Password (robust, REST only) ===
+# === Reset Password (Supabase Auth) ===
 if view == "reset_password":
-    import requests
-
     st.markdown("## Choose a new password")
 
-    # --- Helfer für Query-Params ---
-    def _qp(name: str) -> str:
-        v = st.query_params.get(name)
-        if isinstance(v, list):
-            v = v[0] if v else ""
-        return (v or "").strip()
+    new1 = st.text_input("New password", type="password", key="rp1")
+    new2 = st.text_input("Confirm new password", type="password", key="rp2")
+    clicked = st.button("Set new password")
 
-    email      = _qp("email")
-    token_hash = _qp("token_hash")
-    token_code = _qp("token")   # 6-stellig
-    debug      = _qp("debug") in ("1", "true", "yes")
+    if clicked:
+        # Token aus URL lesen (Supabase schickt je nach Template token oder token_hash)
+        token = st.query_params.get("token") or st.query_params.get("token_hash")
+        email_param = st.query_params.get("email", "")
 
-    # Falls fälschlich ein Hash im "token" steckt (lang, nicht nur Ziffern)
-    if not token_hash and token_code and (len(token_code) > 12 or not token_code.isdigit()):
-        token_hash, token_code = token_code, ""
-
-    pw1 = st.text_input("New password", type="password", key="rp1")
-    pw2 = st.text_input("Confirm new password", type="password", key="rp2")
-    btn = st.button("Set new password")
-
-    def verify_with(payload: dict):
-        url = f"{SUPABASE_URL}/auth/v1/verify"
-        try:
-            r = requests.post(
-                url,
-                headers={"apikey": SUPABASE_KEY, "Content-Type": "application/json"},
-                json=payload,
-                timeout=20,
-            )
-            if debug:
-                st.info(f"/verify → {r.status_code} | {r.text[:300]}")
-            if r.status_code // 100 == 2 and "application/json" in r.headers.get("content-type",""):
-                return (r.json() or {}).get("access_token")
-        except Exception as e:
-            if debug: st.warning(f"/verify exception: {e}")
-        return None
-
-    if btn:
-        if not email or not (token_hash or token_code):
+        if not token:
             st.error("Reset failed. The link may be invalid or expired. Please request a new reset link.")
             st.stop()
-        if pw1 != pw2:
+        if not new1 or new1 != new2:
             st.error("Passwords must match.")
             st.stop()
 
+        DEBUG_RESET = False  # für Diagnose auf True setzen
+
+        # 1) Token verifizieren -> Access Token holen
         access_token = None
+        try:
+            import requests
+            verify_url = f"{SUPABASE_URL}/auth/v1/verify"
+            headers = {
+                "apikey": SUPABASE_ANON_KEY,                       # ← Anon Key verwenden
+                "Authorization": f"Bearer {SUPABASE_ANON_KEY}",    # ← Anon Key verwenden
+                "Content-Type": "application/json",
+            }
+            payload = {"type": "recovery", "token": token}
+            if email_param:
+                payload["email"] = email_param
 
-        # 1) Zuerst HASH versuchen (benötigt KEINE E-Mail)
-        if token_hash:
-            access_token = verify_with({"type": "recovery", "token_hash": token_hash})
-
-        # 2) Falls kein Erfolg: CODE versuchen (hier E-Mail MITGEBEN!)
-        if not access_token and token_code:
-            access_token = verify_with({"type": "recovery", "email": email, "token": token_code})
+            rv = requests.post(verify_url, headers=headers, json=payload, timeout=15)
+            if DEBUG_RESET:
+                st.caption(f"/verify → {rv.status_code} | {rv.text[:200]}")
+            if rv.status_code == 200 and rv.json():
+                access_token = rv.json().get("access_token")
+        except Exception as e:
+            if DEBUG_RESET:
+                st.caption(f"/verify exception: {e}")
 
         if not access_token:
             st.error("Reset failed. The link may be invalid or expired. Please request a new reset link.")
             st.stop()
 
-        # 3) Passwort setzen
+        # 2) Neues Passwort setzen
         try:
-            r = requests.put(
-                f"{SUPABASE_URL}/auth/v1/user",
-                headers={
-                    "apikey": SUPABASE_KEY,
-                    "Authorization": f"Bearer {access_token}",
-                    "Content-Type": "application/json",
-                },
-                json={"password": pw1},
-                timeout=20,
-            )
-            if debug:
-                st.info(f"/user → {r.status_code} | {r.text[:300]}")
-        except Exception as e:
-            if debug: st.warning(f"/user exception: {e}")
-            st.error("Could not set password. Please request a new reset link and try again.")
-            st.stop()
+            upd_url = f"{SUPABASE_URL}/auth/v1/user"
+            upd_headers = {
+                "apikey": SUPABASE_ANON_KEY,                # ← Anon Key
+                "Authorization": f"Bearer {access_token}",  # ← Access Token aus /verify
+                "Content-Type": "application/json",
+            }
+            ru = requests.put(upd_url, headers=upd_headers, json={"password": new1}, timeout=15)
+            if DEBUG_RESET:
+                st.caption(f"/user → {ru.status_code} | {ru.text[:200]}")
 
-        if r.status_code // 100 == 2:
-            st.success("Password updated. You can now log in.")
-            st.markdown("[Back to login](/?view=login)")
-            st.stop()
-        else:
-            st.error("Could not set password. Please request a new reset link and try again.")
+            if ru.status_code == 200:
+                st.success("Password updated. You can now log in.")
+                st.markdown("[Back to login](/?view=login)")
+                st.stop()
+        except Exception as e:
+            if DEBUG_RESET:
+                st.caption(f"/user exception: {e}")
+
+        st.error("Could not set password. Please request a new reset link and try again.")
+        st.stop()
 
 # === Registration ===
 if view == "register":
