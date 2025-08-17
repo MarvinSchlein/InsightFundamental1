@@ -1380,67 +1380,58 @@ if view == "login":
                 st.error("Please enter email and password.")
                 st.stop()
 
+            # Vorübergehend aktiv lassen, um Server-Fehler schnell zu sehen.
+            # Später auf False stellen.
+            DEBUG_AUTH = True
+
+            access_token = None
+
+            # 1) Versuch: Supabase-Python-SDK
+            sdk_error = None
             try:
-                # 1) Primär: Supabase-Python-SDK
-                user_id = None
-                access_token = None
-                refresh_token = None
+                auth_res = supabase.auth.sign_in_with_password({
+                    "email": email_norm,
+                    "password": pwd,
+                })
+                if getattr(auth_res, "session", None) and getattr(auth_res.session, "access_token", None):
+                    access_token = auth_res.session.access_token
+            except Exception as e:
+                sdk_error = str(e)
+                if DEBUG_AUTH:
+                    st.info(f"SDK sign_in error: {sdk_error}")
 
+            # 2) Fallback: REST Password Grant
+            if not access_token:
                 try:
-                    sb_auth_res = supabase.auth.sign_in_with_password({
-                        "email": email_norm,
-                        "password": pwd,
-                    })
-                    # user/session herausziehen (SDK-Struktur!)
-                    user_obj = getattr(sb_auth_res, "user", None)
-                    sess_obj = getattr(sb_auth_res, "session", None)
-                    if user_obj:
-                        user_id = getattr(user_obj, "id", None)
-                    if sess_obj:
-                        access_token = getattr(sess_obj, "access_token", None)
-                        refresh_token = getattr(sess_obj, "refresh_token", None)
-                except Exception:
-                    # SDK könnte auf Streamlit Cloud fehlen/anders reagieren – wir fallen unten auf REST zurück
-                    pass
-
-                # 2) Fallback: REST-Endpoint /auth/v1/token?grant_type=password
-                if not user_id or not access_token:
                     import requests
                     token_url = f"{SUPABASE_URL}/auth/v1/token?grant_type=password"
-                    r = requests.post(
-                        token_url,
-                        headers={
-                            "apikey": SUPABASE_KEY,
-                            "Content-Type": "application/json",
-                        },
-                        json={"email": email_norm, "password": pwd},
-                        timeout=15,
-                    )
+                    headers = {"apikey": SUPABASE_KEY, "Content-Type": "application/json"}
+                    payload = {"email": email_norm, "password": pwd}
+                    r = requests.post(token_url, headers=headers, json=payload, timeout=15)
                     if r.status_code == 200:
-                        j = r.json()
-                        access_token = j.get("access_token")
-                        refresh_token = j.get("refresh_token")
-                        user_id = (j.get("user") or {}).get("id")
+                        access_token = r.json().get("access_token")
                     else:
-                        st.error("Invalid email or password.")
-                        st.stop()
+                        if DEBUG_AUTH:
+                            st.info(f"/auth/v1/token → {r.status_code} | {r.text}")
+                except Exception as e:
+                    if DEBUG_AUTH:
+                        st.info(f"/token exception: {e}")
 
-                # ✅ Login erfolgreich
-                SESSION.logged_in = True
-                SESSION.username = email_norm
-                SESSION.user_id = user_id
-                SESSION.sb_access_token = access_token
-                SESSION.sb_refresh_token = refresh_token
-                SESSION.keep_logged_in = bool(keep_logged_in)
-
-                # Abo-Status weiterhin aus deiner 'users'-Tabelle holen
-                refresh_subscription_status()
-
-                redirect_to("news")
-
-            except Exception:
+            if not access_token:
                 # Keine Details leaken
                 st.error("Invalid email or password.")
+                st.stop()
+
+            # ✅ Login erfolgreich
+            SESSION.logged_in = True
+            SESSION.username = email_norm
+            SESSION.keep_logged_in = bool(keep_logged_in)
+            SESSION.supabase_token = access_token  # optional, kann hilfreich sein
+
+            # Abo-Status aus deiner users-Tabelle nachziehen
+            refresh_subscription_status()
+
+            redirect_to("news")
 
         if forgot_clicked:
             redirect_to("forgot_password")
