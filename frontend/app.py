@@ -14,25 +14,6 @@ from supabase import create_client, Client
 from urllib.parse import urlencode
 import secrets
 from urllib.parse import quote, unquote
-# Optional: quote, falls du es woanders brauchst
-# from urllib.parse import quote
-
-# Lies zuerst aus st.secrets (Streamlit Cloud), dann aus ENV, sonst Fallback
-SUPABASE_URL = (
-    (st.secrets.get("SUPABASE_URL") if hasattr(st, "secrets") else None)
-    or os.getenv("SUPABASE_URL")
-    or "https://DEIN_PROJECT_REF.supabase.co"
-)
-SUPABASE_KEY = (
-    (st.secrets.get("SUPABASE_ANON_KEY") or st.secrets.get("SUPABASE_KEY") if hasattr(st, "secrets") else None)
-    or os.getenv("SUPABASE_ANON_KEY")
-    or os.getenv("SUPABASE_KEY")
-)
-
-if not SUPABASE_URL or not SUPABASE_KEY:
-    st.error("Missing SUPABASE_URL / SUPABASE_ANON_KEY. Bitte in st.secrets oder ENV hinterlegen.")
-    st.stop()
-
 
 # === .env laden (lokal) ===
 load_dotenv()
@@ -58,15 +39,15 @@ APP_BASE_URL = (
 SUPABASE_URL = (
     (st.secrets.get("SUPABASE_URL") if hasattr(st, "secrets") else None)
     or os.getenv("SUPABASE_URL")
-    or "https://hpjprbhavtewgpbjwdic.supabase.co"
 )
-
 SUPABASE_ANON_KEY = (
     (st.secrets.get("SUPABASE_ANON_KEY") if hasattr(st, "secrets") else None)
     or os.getenv("SUPABASE_ANON_KEY")
-    # Fallback auf deinen bisherigen Key (bitte langfristig NICHT hardcoden!)
-    or "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhwanByYmhhdnRld2dwYmp3ZGljIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NTMyMzcsImV4cCI6MjA3MDIyOTIzN30.9Dk0YhonY5nT80UdRo6VtQ76jfSOXEavmjMH_FwaMvw"
 )
+
+if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+    st.error("Missing SUPABASE_URL / SUPABASE_ANON_KEY. Bitte in st.secrets oder ENV hinterlegen.")
+    st.stop()
 
 supabase: Client | None = None
 try:
@@ -127,26 +108,90 @@ def insert_user_to_supabase(email: str, pwd_hash: str):
     except Exception as e:
         return False, str(e)
 
+# ---- Access helpers (paid + trial) ----
+def _fetch_user_flags(email: str) -> dict | None:
+    """
+    Holt subscription_active und trial_until aus public.users für die angegebene E-Mail.
+    """
+    if supabase is None or not email:
+        return None
+    try:
+        res = (
+            supabase.table("users")
+            .select("subscription_active, trial_until")
+            .eq("email", email)
+            .limit(1)
+            .execute()
+        )
+        if res.data:
+            return res.data[0]
+    except Exception:
+        pass
+    return None
+
+def _compute_access(flags: dict) -> tuple[bool, str]:
+    """
+    Leitet aus den Flags den Zugriff und den Plan ab:
+      paid  -> subscription_active = True
+      trial -> trial_until > now()
+      free  -> sonst
+    Rückgabe: (has_access, plan_str)
+    """
+    # 1) Bezahlt
+    if bool(flags.get("subscription_active")):
+        return True, "paid"
+
+    # 2) Trial prüfen
+    trial_until = flags.get("trial_until")
+    if trial_until:
+        try:
+            # ISO-String -> datetime
+            if isinstance(trial_until, str):
+                trial_dt = datetime.fromisoformat(trial_until.replace("Z", "+00:00"))
+            else:
+                trial_dt = trial_until
+            now = datetime.now(timezone.utc)
+            if trial_dt.tzinfo is None:
+                trial_dt = trial_dt.replace(tzinfo=timezone.utc)
+            if trial_dt > now:
+                return True, "trial"
+        except Exception:
+            pass
+
+    # 3) Kein Zugriff
+    return False, "free"
+
 def refresh_subscription_status():
     """
-    Holt 'subscription_active' des eingeloggten Nutzers aus Supabase
-    und setzt session: subscription_active + user_plan ('paid'|'free').
+    Aktualisiert den Session-Status:
+      - state.access_granted (True/False)
+      - state.user_plan ('paid'|'trial'|'free')
+      - state.subscription_active (nur für bezahlte Abos True, sonst False)
     """
     try:
         state = st.session_state
-        if supabase is None or not state.get("username"):
+        email = (state.get("username") or "").strip().lower()
+        if not email:
+            state.access_granted = False
+            state.user_plan = "free"
+            state.subscription_active = False
             return
 
-        email = state["username"].strip().lower()
-        resp = supabase.table("users").select("subscription_active").eq("email", email).execute()
-        if resp.data:
-            active = bool(resp.data[0].get("subscription_active"))
-            state.subscription_active = active
-            state.user_plan = "paid" if active else "free"
+        flags = _fetch_user_flags(email)
+        if not flags:
+            state.access_granted = False
+            state.user_plan = "free"
+            state.subscription_active = False
+            return
+
+        has_access, plan = _compute_access(flags)
+        state.access_granted = has_access
+        state.user_plan = plan
+        state.subscription_active = (plan == "paid")
     except Exception as e:
         st.warning(f"Refresh error: {e}")
 
-# === Forgot-Password: Helper (Supabase) ===
+# === Forgot-Password: Helper (falls noch benötigt) ===
 def create_reset_token() -> str:
     # URL-sicherer Token
     return secrets.token_urlsafe(32)
