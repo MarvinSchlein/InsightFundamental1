@@ -1492,69 +1492,84 @@ import requests
 
 # === Reset Password (Supabase Auth) ===
 if view == "reset_password":
+    q = st.query_params
+    token_hash = q.get("token_hash") or q.get("token") or ""
+    email_qs = q.get("email") or ""
+
     st.markdown("## Choose a new password")
 
-    # Token aus URL nehmen (Fallback: 'token', falls Template alt ist)
-    token_hash = st.query_params.get("token_hash") or st.query_params.get("token") or ""
-    email_hint = st.query_params.get("email", "")
+    new1 = st.text_input("New password", type="password", key="rp1")
+    new2 = st.text_input("Confirm new password", type="password", key="rp2")
+    set_clicked = st.button("Set new password")
 
-    pw1 = st.text_input("New password", type="password")
-    pw2 = st.text_input("Confirm new password", type="password")
-    submit = st.button("Set new password")
+    if set_clicked:
+        # Basic checks
+        if not token_hash or not email_qs:
+            st.error("Reset failed. The link may be invalid or incomplete. Please request a new reset link.")
+            st.stop()
+        if not new1 or new1 != new2:
+            st.error("Passwords must match.")
+            st.stop()
 
-    if submit:
-        if not token_hash:
-            st.error("Reset failed. The link is missing or invalid. Please request a new reset link.")
-            st.stop()
-        if pw1 != pw2 or len(pw1) < 6:
-            st.error("Passwords must match and be at least 6 characters.")
-            st.stop()
+        import requests
 
         try:
-            import requests
-
-            # 1) Token verifizieren -> Session-Access-Token bekommen
+            # 1) Token verifizieren -> Session bekommen
             verify_url = f"{SUPABASE_URL}/auth/v1/verify"
-            v = requests.post(
-                verify_url,
-                headers={
-                    "apikey": SUPABASE_KEY,
-                    "Authorization": f"Bearer {SUPABASE_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={"type": "recovery", "token_hash": token_hash},
-                timeout=15,
-            )
-            if v.status_code != 200:
+            headers = {
+                "apikey": SUPABASE_KEY,
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "type": "recovery",
+                "email": email_qs,
+            }
+            # Akzeptiere sowohl token_hash als auch token (abhängig vom Template)
+            if len(token_hash) > 0:
+                # Supabase akzeptiert EINES von beiden
+                # Wir versuchen erst token_hash, sonst token
+                payload["token_hash"] = token_hash
+
+            rv = requests.post(verify_url, headers=headers, json=payload, timeout=15)
+
+            # Falls dein Template "token" statt "token_hash" liefert
+            if rv.status_code != 200:
+                payload.pop("token_hash", None)
+                payload["token"] = token_hash
+                rv = requests.post(verify_url, headers=headers, json=payload, timeout=15)
+
+            if rv.status_code != 200:
                 st.error("Reset failed. The link may be invalid or expired. Please request a new reset link.")
                 st.stop()
 
-            access_token = v.json().get("access_token")
+            j = rv.json() if rv.content else {}
+            access_token = j.get("access_token")
+            refresh_token = j.get("refresh_token")
+
             if not access_token:
-                st.error("Reset failed (no access token). Please request a new reset link.")
+                st.error("Could not verify the reset link. Please request a new one.")
                 st.stop()
 
-            # 2) Passwort setzen – mit dem Access-Token aus Schritt 1
-            user_url = f"{SUPABASE_URL}/auth/v1/user"
-            u = requests.put(
-                user_url,
-                headers={
-                    "Authorization": f"Bearer {access_token}",  # WICHTIG: NICHT der anon key!
-                    "apikey": SUPABASE_KEY,
-                    "Content-Type": "application/json",
-                },
-                json={"password": pw1},
-                timeout=15,
-            )
+            # 2) Passwort setzen (mit Bearer = access_token aus Schritt 1)
+            upd_url = f"{SUPABASE_URL}/auth/v1/user"
+            upd_headers = {
+                "apikey": SUPABASE_KEY,
+                "Authorization": f"Bearer {access_token}",
+                "Content-Type": "application/json",
+            }
+            up = requests.put(upd_url, headers=upd_headers, json={"password": new1}, timeout=15)
 
-            if u.status_code == 200:
-                st.success("Password updated. You can now log in.")
+            if up.status_code == 200:
+                st.success("Password changed. You can now log in.")
                 st.markdown("[Back to login](/?view=login)")
+                st.stop()
             else:
                 st.error("Could not set password. Please request a new reset link and try again.")
+                st.stop()
 
         except Exception:
-            st.error("Unexpected error. Please request a new reset link and try again.")
+            st.error("Could not set password. Please request a new reset link and try again.")
+            st.stop()
 
 # === Registration ===
 if view == "register":
