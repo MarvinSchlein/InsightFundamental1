@@ -1490,11 +1490,13 @@ if view == "forgot_password":
 
 import requests
 
-# === Reset Password (Supabase Auth, mit token_hash) ===
+# === Reset Password (Supabase Auth: token_hash ODER token) ===
 if view == "reset_password":
     st.markdown("## Choose a new password")
 
+    # Param aus der URL holen (beide Varianten unterstützen)
     token_hash = st.query_params.get("token_hash", "")
+    token_otp  = st.query_params.get("token", "")
     email_qs   = st.query_params.get("email", "")
     email_norm = (email_qs or "").strip().lower()
 
@@ -1503,29 +1505,30 @@ if view == "reset_password":
     set_clicked = st.button("Set new password")
 
     if set_clicked:
-        if not token_hash or not email_norm:
+        if not email_norm or not (token_hash or token_otp):
             st.error("Reset failed. The link may be invalid or expired. Please request a new reset link.")
             st.stop()
         if new1 != new2:
             st.error("Passwords must match.")
             st.stop()
 
+        # -------- 1) OTP verifizieren (SDK, ohne Typ-Importe) --------
         access_token = None
-
-        # 1) Verify OTP über SDK (ohne Typ-Importe)
         try:
-            rv = supabase.auth.verify_otp({
-                "type": "recovery",
-                "email": email_norm,
-                "token_hash": token_hash,
-            })
-            # Falls das SDK eine Session zurückgibt, nimm deren Access Token
+            args = {"type": "recovery", "email": email_norm}
+            if token_hash:
+                args["token_hash"] = token_hash
+            else:
+                args["token"] = token_otp  # 6-stelliger Code
+
+            rv = supabase.auth.verify_otp(args)
+
             if getattr(rv, "session", None) and getattr(rv.session, "access_token", None):
                 access_token = rv.session.access_token
         except Exception:
             pass  # Fallback unten
 
-        # 2) Fallback: Verify via REST, um sicher ein access_token zu bekommen
+        # -------- 2) Fallback über REST, um sicher einen Access Token zu erhalten --------
         if not access_token:
             try:
                 verify_url = f"{SUPABASE_URL}/auth/v1/verify"
@@ -1533,19 +1536,25 @@ if view == "reset_password":
                     "apikey": SUPABASE_KEY,
                     "Content-Type": "application/json",
                 }
-                payload = {"type": "recovery", "email": email_norm, "token_hash": token_hash}
+                payload = {"type": "recovery", "email": email_norm}
+                if token_hash:
+                    payload["token_hash"] = token_hash
+                else:
+                    payload["token"] = token_otp
+
                 r = requests.post(verify_url, headers=headers, json=payload, timeout=15)
-                if r.status_code // 100 == 2 and r.headers.get("content-type", "").startswith("application/json"):
+                if r.status_code // 100 == 2 and r.headers.get("content-type","").startswith("application/json"):
                     j = r.json()
                     access_token = j.get("access_token")
-                else:
+
+                if not access_token:
                     st.error("Reset failed. The link may be invalid or expired. Please request a new reset link.")
                     st.stop()
             except Exception:
                 st.error("Reset failed. The link may be invalid or expired. Please request a new reset link.")
                 st.stop()
 
-        # 3) Passwort setzen (REST /auth/v1/user mit Bearer=access_token)
+        # -------- 3) Neues Passwort setzen --------
         try:
             upd_url = f"{SUPABASE_URL}/auth/v1/user"
             upd_headers = {
