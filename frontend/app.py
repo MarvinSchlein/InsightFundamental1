@@ -1490,86 +1490,78 @@ if view == "forgot_password":
 
 import requests
 
-# === Reset Password (Supabase Auth) ===
+# === Reset Password (Supabase Auth, mit token_hash) ===
 if view == "reset_password":
-    q = st.query_params
-    token_hash = q.get("token_hash") or q.get("token") or ""
-    email_qs = q.get("email") or ""
-
     st.markdown("## Choose a new password")
+
+    token_hash = st.query_params.get("token_hash", "")
+    email_qs   = st.query_params.get("email", "")
+    email_norm = (email_qs or "").strip().lower()
 
     new1 = st.text_input("New password", type="password", key="rp1")
     new2 = st.text_input("Confirm new password", type="password", key="rp2")
     set_clicked = st.button("Set new password")
 
     if set_clicked:
-        # Basic checks
-        if not token_hash or not email_qs:
-            st.error("Reset failed. The link may be invalid or incomplete. Please request a new reset link.")
+        if not token_hash or not email_norm:
+            st.error("Reset failed. The link may be invalid or expired. Please request a new reset link.")
             st.stop()
-        if not new1 or new1 != new2:
+        if new1 != new2:
             st.error("Passwords must match.")
             st.stop()
 
-        import requests
+        access_token = None
 
+        # 1) Verify OTP über SDK (ohne Typ-Importe)
         try:
-            # 1) Token verifizieren -> Session bekommen
-            verify_url = f"{SUPABASE_URL}/auth/v1/verify"
-            headers = {
-                "apikey": SUPABASE_KEY,
-                "Content-Type": "application/json",
-            }
-            payload = {
+            rv = supabase.auth.verify_otp({
                 "type": "recovery",
-                "email": email_qs,
-            }
-            # Akzeptiere sowohl token_hash als auch token (abhängig vom Template)
-            if len(token_hash) > 0:
-                # Supabase akzeptiert EINES von beiden
-                # Wir versuchen erst token_hash, sonst token
-                payload["token_hash"] = token_hash
+                "email": email_norm,
+                "token_hash": token_hash,
+            })
+            # Falls das SDK eine Session zurückgibt, nimm deren Access Token
+            if getattr(rv, "session", None) and getattr(rv.session, "access_token", None):
+                access_token = rv.session.access_token
+        except Exception:
+            pass  # Fallback unten
 
-            rv = requests.post(verify_url, headers=headers, json=payload, timeout=15)
-
-            # Falls dein Template "token" statt "token_hash" liefert
-            if rv.status_code != 200:
-                payload.pop("token_hash", None)
-                payload["token"] = token_hash
-                rv = requests.post(verify_url, headers=headers, json=payload, timeout=15)
-
-            if rv.status_code != 200:
+        # 2) Fallback: Verify via REST, um sicher ein access_token zu bekommen
+        if not access_token:
+            try:
+                verify_url = f"{SUPABASE_URL}/auth/v1/verify"
+                headers = {
+                    "apikey": SUPABASE_KEY,
+                    "Content-Type": "application/json",
+                }
+                payload = {"type": "recovery", "email": email_norm, "token_hash": token_hash}
+                r = requests.post(verify_url, headers=headers, json=payload, timeout=15)
+                if r.status_code // 100 == 2 and r.headers.get("content-type", "").startswith("application/json"):
+                    j = r.json()
+                    access_token = j.get("access_token")
+                else:
+                    st.error("Reset failed. The link may be invalid or expired. Please request a new reset link.")
+                    st.stop()
+            except Exception:
                 st.error("Reset failed. The link may be invalid or expired. Please request a new reset link.")
                 st.stop()
 
-            j = rv.json() if rv.content else {}
-            access_token = j.get("access_token")
-            refresh_token = j.get("refresh_token")
-
-            if not access_token:
-                st.error("Could not verify the reset link. Please request a new one.")
-                st.stop()
-
-            # 2) Passwort setzen (mit Bearer = access_token aus Schritt 1)
+        # 3) Passwort setzen (REST /auth/v1/user mit Bearer=access_token)
+        try:
             upd_url = f"{SUPABASE_URL}/auth/v1/user"
             upd_headers = {
                 "apikey": SUPABASE_KEY,
                 "Authorization": f"Bearer {access_token}",
                 "Content-Type": "application/json",
             }
-            up = requests.put(upd_url, headers=upd_headers, json={"password": new1}, timeout=15)
-
-            if up.status_code == 200:
-                st.success("Password changed. You can now log in.")
+            ur = requests.put(upd_url, headers=upd_headers, json={"password": new1}, timeout=15)
+            if ur.status_code // 100 == 2:
+                st.success("Password updated. You can now log in.")
                 st.markdown("[Back to login](/?view=login)")
                 st.stop()
             else:
                 st.error("Could not set password. Please request a new reset link and try again.")
-                st.stop()
-
         except Exception:
             st.error("Could not set password. Please request a new reset link and try again.")
-            st.stop()
 
 # === Registration ===
 if view == "register":
