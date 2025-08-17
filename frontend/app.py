@@ -1489,31 +1489,32 @@ if view == "forgot_password":
             st.error("Please enter your email.")
             st.stop()
 
-        # Supabase Auth: /auth/v1/recover – Link und Mail kommen von Supabase
+        # Fürs Debuggen ggf. auf True stellen
+        DEBUG_RECOVER = False
+
         try:
             import requests
             RECOVER_URL = f"{SUPABASE_URL}/auth/v1/recover"
             headers = {
-                "apikey": SUPABASE_KEY,                 # dein anon key
-                "Authorization": f"Bearer {SUPABASE_KEY}",
+                "apikey": SUPABASE_ANON_KEY,                       # ← Anon Key!
+                "Authorization": f"Bearer {SUPABASE_ANON_KEY}",    # ← Anon Key!
                 "Content-Type": "application/json",
             }
-            # redirect_to optional – wir nutzen primär den Link aus der E-Mail-Vorlage
-            params = {"redirect_to": "https://insightfundamental.streamlit.app/?view=reset_password"}
+            params = {"redirect_to": f"{APP_BASE_URL}/?view=reset_password"}
             r = requests.post(RECOVER_URL, headers=headers, json={"email": email_norm}, params=params, timeout=15)
-            if r.status_code in (200, 204):
-                st.success("If an account exists for this email, a reset link has been sent.")
-            else:
-                # keine Details leaken
-                st.success("If an account exists for this email, a reset link has been sent.")
+
+            if DEBUG_RECOVER:
+                st.caption(f"recover status={r.status_code} body={r.text[:200]}")
+
+            # Immer gleiche Meldung nach außen (kein User-Enumeration)
+            st.success("If an account exists for this email, a reset link has been sent.")
         except Exception as e:
-            # aus Sicherheitsgründen auch hier Erfolgstext
+            if DEBUG_RECOVER:
+                st.caption(f"recover exception: {e}")
             st.success("If an account exists for this email, a reset link has been sent.")
 
         st.markdown("[Back to login](/?view=login)")
         st.stop()
-
-import requests
 
 # === Reset Password (robust, REST only) ===
 if view == "reset_password":
