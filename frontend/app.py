@@ -111,15 +111,19 @@ def insert_user_to_supabase(email: str, pwd_hash: str):
 # ---- Access helpers (paid + trial) ----
 def _fetch_user_flags(email: str) -> dict | None:
     """
-    Holt subscription_active und trial_until aus public.users für die angegebene E-Mail.
+    Holt subscription_active und trial_until aus public.profiles (nicht mehr users!)
+    für die angegebene E-Mail (Kleinschreibung!).
     """
     if supabase is None or not email:
         return None
     try:
+        email_norm = (email or "").strip().lower()
+        # Voraussetzung: In profiles existiert eine Spalte 'email'.
+        # (Falls nicht, sagen — dann stellen wir auf Lookup via user_id um.)
         res = (
-            supabase.table("users")
+            supabase.table("profiles")
             .select("subscription_active, trial_until")
-            .eq("email", email)
+            .eq("email", email_norm)
             .limit(1)
             .execute()
         )
@@ -145,6 +149,7 @@ def _compute_access(flags: dict) -> tuple[bool, str]:
     trial_until = flags.get("trial_until")
     if trial_until:
         try:
+            from datetime import datetime, timezone
             # ISO-String -> datetime
             if isinstance(trial_until, str):
                 trial_dt = datetime.fromisoformat(trial_until.replace("Z", "+00:00"))
@@ -177,19 +182,55 @@ def refresh_subscription_status():
             state.subscription_active = False
             return
 
-        flags = _fetch_user_flags(email)
-        if not flags:
-            state.access_granted = False
-            state.user_plan = "free"
-            state.subscription_active = False
-            return
-
+        flags = _fetch_user_flags(email) or {}
         has_access, plan = _compute_access(flags)
+
         state.access_granted = has_access
         state.user_plan = plan
-        state.subscription_active = (plan == "paid")
+        # echter DB-Flag für paid; bei trial bleibt False
+        state.subscription_active = bool(flags.get("subscription_active", False))
     except Exception as e:
         st.warning(f"Refresh error: {e}")
+
+# === Access-Guard: nur für eingeloggte + (paid ODER aktive Trial) ===
+def require_access():
+    # eingeloggt?
+    if not st.session_state.get("logged_in"):
+        st.info("Please log in to access this page.")
+        st.markdown("[Go to login](/?view=login)")
+        st.stop()
+
+    # Flags sicher aktualisieren (liest users.subscription_active / trial_until)
+    refresh_subscription_status()
+
+    # Zugriff prüfen
+    if not st.session_state.get("access_granted", False):
+        st.error("You need an active subscription or a valid trial to access this page.")
+        st.markdown("[Start 14-day free trial now](/?view=pricing)")
+        st.stop()
+
+# === 🔒 Guard für geschützte Seiten (NEU) ===
+def require_access():
+    """
+    Sichert bezahlte/Trial-Seiten ab.
+    - leitet Nicht-Eingeloggte zum Login
+    - blockiert Nutzer ohne aktives Abo & ohne laufende Trial
+    """
+    # immer frisch holen (falls Login/Logout gerade passiert ist)
+    refresh_subscription_status()
+    s = st.session_state
+
+    # nicht eingeloggt?
+    if not s.get("logged_in"):
+        st.info("Please log in to continue.")
+        redirect_to("login")
+        st.stop()
+
+    # kein Zugriff (weder paid noch aktive Trial)?
+    if not s.get("access_granted"):
+        st.warning("Your trial has ended or no active subscription.")
+        st.markdown("[Start free trial or manage subscription](/?view=register)")
+        st.stop()
 
 # === Forgot-Password: Helper (falls noch benötigt) ===
 def create_reset_token() -> str:
@@ -1091,14 +1132,15 @@ if view == "landing":
 
 # === Platzhalter für andere Views ===
 elif view == "news-analysis":
-    if not st.session_state.get("logged_in") or not st.session_state.get("subscription_active"):
-        redirect_to("login")
-        st.rerun()
-    
+    # Zugriff: eingeloggt + (paid ODER aktive Trial)
+    require_access()
+
+    st.markdown("<style>.block-container {padding-top: 0.5rem !important;}</style>", unsafe_allow_html=True)
     st.title("News Analysis")
     st.write("Hier erscheinen später die analysierten Nachrichten.")
 
-elif view == "reset-password":
+elif view == "reset_password":
+    # Hinweis: Dieser View-Name (mit Unterstrich) passt zu den Reset-Links aus den E-Mails.
     st.title("Reset Password")
     st.write("Hier kann das Passwort zurückgesetzt werden.")
 
@@ -1403,9 +1445,9 @@ if view == "login":
         email = st.text_input("Email", key="login_email")
         pwd   = st.text_input("Password", type="password", key="login_pwd")
 
-        # WICHTIG: eigener Widget-Key, NICHT "keep_logged_in"
+        # eigener Widget-Key (nicht "keep_logged_in")
         st.markdown('<div class="stay-checkbox">', unsafe_allow_html=True)
-        keep_me = st.checkbox("Keep me signed in", key="keep_me_input")  # CHANGED
+        keep_me = st.checkbox("Keep me signed in", key="keep_me_input")
         st.markdown('</div>', unsafe_allow_html=True)
 
         login_clicked  = st.button("Log in")
@@ -1417,34 +1459,49 @@ if view == "login":
                 st.error("Please enter email and password.")
                 st.stop()
 
-            DEBUG_AUTH = True  # optional: später auf False
+            DEBUG_AUTH = True  # optional
 
             access_token = None
+            user_id = None
 
             # 1) Supabase-Python-SDK
-            sdk_error = None
             try:
                 auth_res = supabase.auth.sign_in_with_password({
                     "email": email_norm,
                     "password": pwd,
                 })
+                # Wenn Erfolg: session + user vorhanden
                 if getattr(auth_res, "session", None) and getattr(auth_res.session, "access_token", None):
                     access_token = auth_res.session.access_token
+                    user_id = getattr(auth_res.user, "id", None)
             except Exception as e:
-                sdk_error = str(e)
                 if DEBUG_AUTH:
-                    st.info(f"SDK sign_in error: {sdk_error}")
+                    st.info(f"SDK sign_in error: {e}")
 
-            # 2) Fallback: REST Password Grant
+            # 2) Fallback: REST Password Grant -> anschließend /auth/v1/user um die user_id zu holen
             if not access_token:
                 try:
-                    import requests
                     token_url = f"{SUPABASE_URL}/auth/v1/token?grant_type=password"
-                    headers = {"apikey": SUPABASE_KEY, "Content-Type": "application/json"}
+                    headers = {"apikey": SUPABASE_ANON_KEY, "Content-Type": "application/json"}
                     payload = {"email": email_norm, "password": pwd}
                     r = requests.post(token_url, headers=headers, json=payload, timeout=15)
                     if r.status_code == 200:
                         access_token = r.json().get("access_token")
+
+                        # user_id via /auth/v1/user
+                        if access_token:
+                            u = requests.get(
+                                f"{SUPABASE_URL}/auth/v1/user",
+                                headers={
+                                    "apikey": SUPABASE_ANON_KEY,
+                                    "Authorization": f"Bearer {access_token}",
+                                },
+                                timeout=15,
+                            )
+                            if u.status_code == 200:
+                                user_id = (u.json() or {}).get("id")
+                            elif DEBUG_AUTH:
+                                st.info(f"/auth/v1/user → {u.status_code} | {u.text}")
                     else:
                         if DEBUG_AUTH:
                             st.info(f"/auth/v1/token → {r.status_code} | {r.text}")
@@ -1452,17 +1509,19 @@ if view == "login":
                     if DEBUG_AUTH:
                         st.info(f"/token exception: {e}")
 
-            if not access_token:
+            if not access_token or not user_id:
+                # Keine Details leaken
                 st.error("Invalid email or password.")
                 st.stop()
 
-            # ✅ Login erfolgreich (KEINE Session-Key-Kollision mit Widget)
-            SESSION.logged_in       = True
-            SESSION.username        = email_norm
-            SESSION.keep_signed_in  = bool(keep_me)      # CHANGED (neuer Session-Key)
-            SESSION.supabase_token  = access_token       # optional
+            # ✅ Login erfolgreich – Session setzen (inkl. user_id!)
+            SESSION.logged_in      = True
+            SESSION.username       = email_norm
+            SESSION.user_id        = user_id          # ← WICHTIG für profiles-Abfrage
+            SESSION.keep_signed_in = bool(keep_me)
+            SESSION.supabase_token = access_token     # optional
 
-            # Abo-Status aus users-Tabelle ziehen
+            # Zugriff/Plan aus public.profiles laden
             refresh_subscription_status()
 
             redirect_to("news")
