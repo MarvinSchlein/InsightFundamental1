@@ -1,6 +1,8 @@
 import os
 import json
 import logging
+from typing import Optional
+
 import stripe
 from flask import Flask, request, jsonify, redirect
 from supabase import create_client, Client
@@ -28,12 +30,12 @@ supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 app = Flask(__name__)
 
 # ---------- Helpers ----------
-def normalize_email(email: str | None) -> str | None:
+def normalize_email(email: Optional[str]) -> Optional[str]:
     if not email:
         return None
     return email.strip().lower()
 
-def get_email_from_customer_id(customer_id: str | None) -> str | None:
+def get_email_from_customer_id(customer_id: Optional[str]) -> Optional[str]:
     if not customer_id:
         return None
     try:
@@ -43,27 +45,70 @@ def get_email_from_customer_id(customer_id: str | None) -> str | None:
         log.warning("⚠️ could not retrieve customer %s: %s", customer_id, e)
         return None
 
-def supabase_set_subscription(email: str, active: bool) -> dict:
+# === NEU: user_id per RPC aus auth.users ziehen ===
+def _get_auth_user_id(email: str) -> Optional[str]:
     """
-    Setzt subscription_active für email.
-    Versucht exact match -> ILIKE -> Upsert (falls User noch nicht existiert).
+    Ruft die auth.users.id über die SQL-Funktion public.user_id_by_email(email) ab.
+    Die Funktion muss in Supabase bereits existieren (Schritt 1).
     """
-    # 1) exact match
-    resp = supabase.table("users").update({"subscription_active": active}).eq("email", email).execute()
-    if resp.data:
-        return {"mode": "eq", "data": resp.data}
+    try:
+        res = supabase.rpc("user_id_by_email", {"email": email}).execute()
+        data = res.data
+        # robust extrahieren (je nach Rückgabeform)
+        if not data:
+            return None
+        if isinstance(data, str):
+            return data
+        if isinstance(data, dict) and data.get("user_id"):
+            return data["user_id"]
+        if isinstance(data, list) and len(data) > 0:
+            first = data[0]
+            if isinstance(first, str):
+                return first
+            if isinstance(first, dict) and first.get("user_id"):
+                return first["user_id"]
+        return None
+    except Exception as e:
+        log.error("❌ RPC user_id_by_email failed for %s: %s", email, e, exc_info=True)
+        return None
 
-    # 2) case-insensitive
-    resp2 = supabase.table("users").update({"subscription_active": active}).ilike("email", email).execute()
-    if resp2.data:
-        return {"mode": "ilike", "data": resp2.data}
+# === NEU: Abo-Status in public.profiles setzen (statt public.users) ===
+def set_profile_subscription(email: str, active: bool) -> dict:
+    """
+    Setzt subscription_active in public.profiles für den zugehörigen auth.users.id.
+    Falls kein Profil existiert, wird (best effort) ein Insert versucht.
+    """
+    email_norm = normalize_email(email)
+    if not email_norm:
+        return {"mode": "invalid-email"}
 
-    # 3) upsert (falls Checkout vor Registration passiert ist)
-    upsert = supabase.table("users").upsert(
-        {"email": email, "subscription_active": active},
-        on_conflict="email"
-    ).execute()
-    return {"mode": "upsert", "data": upsert.data}
+    user_id = _get_auth_user_id(email_norm)
+    if not user_id:
+        log.warning("⚠️ No auth.user found for email=%s", email_norm)
+        return {"mode": "missing-auth-user"}
+
+    try:
+        # 1) Update versuchen
+        upd = (
+            supabase.table("profiles")
+            .update({"subscription_active": active})
+            .eq("id", user_id)
+            .execute()
+        )
+        if upd.data:
+            return {"mode": "update", "data": upd.data}
+
+        # 2) Falls kein Datensatz vorhanden → Insert/Upsert
+        #    (id ist PK; bei bereits existierendem Datensatz ist Update der übliche Pfad)
+        ins = (
+            supabase.table("profiles")
+            .upsert({"id": user_id, "subscription_active": active})
+            .execute()
+        )
+        return {"mode": "upsert", "data": ins.data}
+    except Exception as e:
+        log.error("❌ Supabase profiles update error: %s", e, exc_info=True)
+        return {"mode": "error", "error": str(e)}
 
 # ---------- Health / Root ----------
 @app.route("/", methods=["GET", "HEAD"])
@@ -131,7 +176,7 @@ def stripe_webhook():
     # ========== checkout.session.completed ==========
     if etype == "checkout.session.completed":
         session = event["data"]["object"]
-        # In manchen Events ist customer_email null → customer_details.email verwenden
+        # Bevorzugt: customer_details.email
         email = normalize_email((session.get("customer_details") or {}).get("email"))
         if not email:
             # Fallback via customer_id
@@ -142,11 +187,10 @@ def stripe_webhook():
             return jsonify(ok=True), 200
 
         try:
-            result = supabase_set_subscription(email, True)
-            log.info("📦 Supabase update result (checkout, %s): %s", result.get("mode"), result.get("data"))
+            result = set_profile_subscription(email, True)
+            log.info("📦 profiles update result (checkout): %s", result)
         except Exception as e:
-            log.error("❌ Supabase update error (checkout): %s", e, exc_info=True)
-            return jsonify(ok=True), 200
+            log.error("❌ profiles update error (checkout): %s", e, exc_info=True)
 
     # ========== customer.subscription.created / updated ==========
     elif etype in ("customer.subscription.created", "customer.subscription.updated"):
@@ -161,11 +205,11 @@ def stripe_webhook():
 
         make_active = status in ("active", "trialing")
         try:
-            result = supabase_set_subscription(email, make_active)
-            log.info("🔁 Subscription status=%s -> subscription_active=%s (%s): %s",
-                     status, make_active, result.get("mode"), result.get("data"))
+            result = set_profile_subscription(email, make_active)
+            log.info("🔁 profiles status=%s -> subscription_active=%s: %s",
+                     status, make_active, result)
         except Exception as e:
-            log.error("❌ Supabase update error (subscription.%s): %s", status, e, exc_info=True)
+            log.error("❌ profiles update error (subscription.%s): %s", status, e, exc_info=True)
 
     # ========== customer.subscription.deleted ==========
     elif etype == "customer.subscription.deleted":
@@ -173,10 +217,10 @@ def stripe_webhook():
         email = get_email_from_customer_id(sub.get("customer"))
         if email:
             try:
-                result = supabase_set_subscription(email, False)
-                log.info("🔻 Deactivated after cancellation (%s): %s", result.get("mode"), result.get("data"))
+                result = set_profile_subscription(email, False)
+                log.info("🔻 Deactivated after cancellation: %s", result)
             except Exception as e:
-                log.error("❌ Supabase update error (subscription.deleted): %s", e, exc_info=True)
+                log.error("❌ profiles update error (subscription.deleted): %s", e, exc_info=True)
 
     # ========== invoice.payment_failed ==========
     elif etype == "invoice.payment_failed":
@@ -184,10 +228,10 @@ def stripe_webhook():
         email = get_email_from_customer_id(inv.get("customer"))
         if email:
             try:
-                result = supabase_set_subscription(email, False)
-                log.info("🔻 Deactivated after payment failure (%s): %s", result.get("mode"), result.get("data"))
+                result = set_profile_subscription(email, False)
+                log.info("🔻 Deactivated after payment failure: %s", result)
             except Exception as e:
-                log.error("❌ Supabase update error (payment_failed): %s", e, exc_info=True)
+                log.error("❌ profiles update error (payment_failed): %s", e, exc_info=True)
 
     # ========== invoice.payment_succeeded ==========
     elif etype == "invoice.payment_succeeded":
@@ -195,10 +239,10 @@ def stripe_webhook():
         email = get_email_from_customer_id(inv.get("customer"))
         if email:
             try:
-                result = supabase_set_subscription(email, True)
-                log.info("✅ Activated after payment succeeded (%s): %s", result.get("mode"), result.get("data"))
+                result = set_profile_subscription(email, True)
+                log.info("✅ Activated after payment succeeded: %s", result)
             except Exception as e:
-                log.error("❌ Supabase update error (payment_succeeded): %s", e, exc_info=True)
+                log.error("❌ profiles update error (payment_succeeded): %s", e, exc_info=True)
 
     return jsonify(ok=True), 200
 
