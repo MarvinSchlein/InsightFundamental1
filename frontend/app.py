@@ -1569,7 +1569,7 @@ if view == "login":
 
 # === Forgot Password (Supabase Auth: E-Mail anfordern) ===
 if view == "forgot_password":
-    st.markdown("## Forgot your password?")
+    st.header("Forgot your password?")
     st.write("Enter your email address and we'll send you a reset link.")
 
     with st.form("forgot_form"):
@@ -1583,50 +1583,56 @@ if view == "forgot_password":
             st.stop()
 
         try:
-            # Supabase: Recovery-Mail versenden
+            # Wichtig: redirect_to muss auf deinen reset_password-View zeigen
             supabase.auth.reset_password_for_email(
                 email_norm,
                 options={"redirect_to": f"{APP_BASE_URL}/?view=reset_password"}
             )
-            # Supabase antwortet 200/204 ohne weitere Details – immer neutrale Meldung zeigen
-            st.success("If an account exists for this email, a reset link has been sent.")
         except Exception:
-            st.success("If an account exists for this email, a reset link has been sent.")
+            # Keine Details leaken
+            pass
 
+        st.success("If an account exists for this email, a reset link has been sent.")
         st.markdown("[Back to login](/?view=login)")
         st.stop()
 
-# === Reset Password (über Supabase Auth-Link) ===
-elif view == "reset_password":
-    st.markdown("## Set a new password")
+# === Reset Password (mit Supabase 'code') ===
+if view == "reset_password":
+    st.header("Reset Password")
 
-    # Supabase schickt je nach Flow einen ?code=... (PKCE) oder ist direkt schon "eingeloggt".
-    # Falls ein Code vorhanden ist: in eine Session tauschen.
-    code = st.query_params.get("code")
-    if code:
+    # 1) Den 'code' aus der URL holen (kommt aus {{ .ConfirmationURL }})
+    code = st.query_params.get("code", None)
+
+    # 2) Falls ein Code vorhanden ist und wir noch keine Session haben, eintauschen
+    if code and not st.session_state.get("supabase_token"):
         try:
-            supabase.auth.exchange_code_for_session({"auth_code": code})
+            sess = supabase.auth.exchange_code_for_session({"auth_code": code})
+            # optional das Access-Token in der Session merken
+            if getattr(sess, "session", None) and getattr(sess.session, "access_token", None):
+                st.session_state["supabase_token"] = sess.session.access_token
         except Exception:
-            # Wenn der Code bereits benutzt/abgelaufen ist, fällt das hier auf.
-            st.error("Reset failed. The link may be invalid or expired. Please request a new reset link.")
+            st.error("The link may be invalid or expired. Please request a new reset link.")
             st.markdown("[Request a new link](/?view=forgot_password)")
             st.stop()
 
-    # Formular zum Setzen des neuen Passworts
+    # 3) Passwort-Formular
     with st.form("reset_form"):
-        new1 = st.text_input("New password", type="password")
-        new2 = st.text_input("Confirm new password", type="password")
-        sub  = st.form_submit_button("Update password")
+        p1 = st.text_input("New password", type="password", key="rp1")
+        p2 = st.text_input("Confirm new password", type="password", key="rp2")
+        ok = st.form_submit_button("Update password")
 
-    if sub:
-        if not new1 or new1 != new2:
-            st.error("Passwords do not match.")
+    if ok:
+        if not p1 or not p2:
+            st.error("Please fill in both fields.")
             st.stop()
+        if p1 != p2:
+            st.error("Passwords must match.")
+            st.stop()
+
         try:
-            # Wichtig: update_user setzt das Passwort für den aktuell authentifizierten User
-            supabase.auth.update_user({"password": new1})
-            st.success("Password updated. You can now log in with your new password.")
-            st.markdown("[Back to login](/?view=login)")
+            supabase.auth.update_user({"password": p1})
+            st.success("Password updated. You can now log in.")
+            st.markdown("[Go to login](/?view=login)")
             st.stop()
         except Exception:
             st.error("Could not update password. The link may be invalid or expired.")
