@@ -1567,7 +1567,7 @@ if view == "login":
 
     st.stop()
 
-# === Forgot Password (Supabase Auth: E-Mail anfordern) ===
+# === Forgot Password (Mail anfordern über Supabase Auth) ===
 if view == "forgot_password":
     st.header("Forgot your password?")
     st.write("Enter your email address and we'll send you a reset link.")
@@ -1582,40 +1582,88 @@ if view == "forgot_password":
             st.error("Please enter your email.")
             st.stop()
 
+        # Nur SDK benutzen (einfach & stabil):
         try:
-            # Wichtig: redirect_to muss auf deinen reset_password-View zeigen
             supabase.auth.reset_password_for_email(
                 email_norm,
                 options={"redirect_to": f"{APP_BASE_URL}/?view=reset_password"}
             )
         except Exception:
-            # Keine Details leaken
+            # Keine Details leaken – trotzdem "Erfolg" anzeigen
             pass
 
         st.success("If an account exists for this email, a reset link has been sent.")
         st.markdown("[Back to login](/?view=login)")
         st.stop()
 
-# === Reset Password (mit Supabase 'code') ===
+# === Reset Password (hybrid: code ODER token/token_hash) ===
 if view == "reset_password":
     st.header("Reset Password")
 
-    # 1) Den 'code' aus der URL holen (kommt aus {{ .ConfirmationURL }})
-    code = st.query_params.get("code", None)
+    # Kleiner, sicherer Debug-Schalter (später auf False stellen)
+    DEBUG = True
 
-    # 2) Falls ein Code vorhanden ist und wir noch keine Session haben, eintauschen
-    if code and not st.session_state.get("supabase_token"):
-        try:
-            sess = supabase.auth.exchange_code_for_session({"auth_code": code})
-            # optional das Access-Token in der Session merken
-            if getattr(sess, "session", None) and getattr(sess.session, "access_token", None):
-                st.session_state["supabase_token"] = sess.session.access_token
-        except Exception:
+    # Query-Parameter robust einlesen
+    qp = st.query_params
+    raw_code       = qp.get("code") or qp.get("verification_code")
+    raw_token      = qp.get("token")
+    raw_token_hash = qp.get("token_hash")
+    email_qp       = qp.get("email")  # bei alten Templates dabei
+
+    def _mask(s, keep=6):
+        if not s:
+            return ""
+        return s[:keep] + "…" if len(s) > keep else s
+
+    if DEBUG:
+        st.caption(
+            f"Params → code={bool(raw_code)}, token={bool(raw_token)}, "
+            f"token_hash={bool(raw_token_hash)}, email={email_qp or '-'}"
+        )
+
+    # 1) Versuchen, eine Auth-Session herzustellen, falls noch keine existiert
+    if not st.session_state.get("supabase_token"):
+        got_session = False
+        # A) Neuer Flow ({{ .ConfirmationURL }}) → ?code=...
+        if raw_code and not got_session:
+            try:
+                # Manche Versionen akzeptieren dict, manche direkt den Code-String
+                try:
+                    sess = supabase.auth.exchange_code_for_session({"auth_code": raw_code})
+                except TypeError:
+                    sess = supabase.auth.exchange_code_for_session(raw_code)
+
+                if getattr(sess, "session", None) and getattr(sess.session, "access_token", None):
+                    st.session_state["supabase_token"] = sess.session.access_token
+                    got_session = True
+                elif DEBUG:
+                    st.caption("exchange_code_for_session returned no session")
+            except Exception as e:
+                if DEBUG: st.caption(f"exchange_code_for_session error: {e}")
+
+        # B) Alte Links (eigene Templates): ?token=… (& token_hash=…)
+        #   -> Manche Setups akzeptieren das Token direkt als 'code'
+        if not got_session and raw_token:
+            try:
+                try:
+                    sess = supabase.auth.exchange_code_for_session({"auth_code": raw_token})
+                except TypeError:
+                    sess = supabase.auth.exchange_code_for_session(raw_token)
+
+                if getattr(sess, "session", None) and getattr(sess.session, "access_token", None):
+                    st.session_state["supabase_token"] = sess.session.access_token
+                    got_session = True
+                elif DEBUG:
+                    st.caption("token fallback returned no session")
+            except Exception as e:
+                if DEBUG: st.caption(f"token fallback error: {e}")
+
+        if not got_session:
             st.error("The link may be invalid or expired. Please request a new reset link.")
             st.markdown("[Request a new link](/?view=forgot_password)")
             st.stop()
 
-    # 3) Passwort-Formular
+    # 2) Passwort setzen
     with st.form("reset_form"):
         p1 = st.text_input("New password", type="password", key="rp1")
         p2 = st.text_input("Confirm new password", type="password", key="rp2")
@@ -1634,7 +1682,8 @@ if view == "reset_password":
             st.success("Password updated. You can now log in.")
             st.markdown("[Go to login](/?view=login)")
             st.stop()
-        except Exception:
+        except Exception as e:
+            if DEBUG: st.caption(f"update_user error: {e}")
             st.error("Could not update password. The link may be invalid or expired.")
             st.markdown("[Request a new link](/?view=forgot_password)")
             st.stop()
