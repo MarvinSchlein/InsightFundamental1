@@ -1596,74 +1596,66 @@ if view == "forgot_password":
         st.markdown("[Back to login](/?view=login)")
         st.stop()
 
-# === Reset Password (hybrid: code ODER token/token_hash) ===
+# === Reset Password (robust: Hash → Query umschreiben + Session + Update) ===
 if view == "reset_password":
     st.header("Reset Password")
 
-    # Kleiner, sicherer Debug-Schalter (später auf False stellen)
-    DEBUG = True
+    # 1) JS-Fix: Falls Supabase den Code/Token im URL-Fragment (#...) liefert,
+    #    schreiben wir ihn in die Query (?code=...) und laden einmal neu.
+    components.html("""
+    <script>
+    (function () {
+      try {
+        var h = window.location.hash;               // z.B. "#access_token=...&type=recovery"
+        if (h && h.length > 1) {
+          var p = new URLSearchParams(h.substring(1));
+          var code = p.get("code") || p.get("access_token") || p.get("token");
+          if (code) {
+            var u = new URL(window.location.href);
+            if (!u.searchParams.get("code")) {
+              u.searchParams.set("code", code);
+              window.history.replaceState(null, "", u.toString());
+              window.location.reload();             // einmal neu laden, damit Streamlit den Param sieht
+            }
+          }
+        }
+      } catch (e) { /* silent */ }
+    })();
+    </script>
+    """, height=0)
 
-    # Query-Parameter robust einlesen
+    DEBUG = True  # zum Troubleshooting; später auf False
+
+    # 2) Query-Parameter lesen (nach möglichem Reload)
     qp = st.query_params
-    raw_code       = qp.get("code") or qp.get("verification_code")
-    raw_token      = qp.get("token")
-    raw_token_hash = qp.get("token_hash")
-    email_qp       = qp.get("email")  # bei alten Templates dabei
+    code = qp.get("code")  # nach dem JS-Fix vorhanden
 
-    def _mask(s, keep=6):
-        if not s:
-            return ""
-        return s[:keep] + "…" if len(s) > keep else s
-
-    if DEBUG:
-        st.caption(
-            f"Params → code={bool(raw_code)}, token={bool(raw_token)}, "
-            f"token_hash={bool(raw_token_hash)}, email={email_qp or '-'}"
-        )
-
-    # 1) Versuchen, eine Auth-Session herzustellen, falls noch keine existiert
+    # 3) Falls noch keine Auth-Session da ist: per Code eintauschen
     if not st.session_state.get("supabase_token"):
         got_session = False
-        # A) Neuer Flow ({{ .ConfirmationURL }}) → ?code=...
-        if raw_code and not got_session:
+        if code:
             try:
-                # Manche Versionen akzeptieren dict, manche direkt den Code-String
+                # manche Versionen erwarten dict, andere den reinen String:
                 try:
-                    sess = supabase.auth.exchange_code_for_session({"auth_code": raw_code})
+                    sess = supabase.auth.exchange_code_for_session({"auth_code": code})
                 except TypeError:
-                    sess = supabase.auth.exchange_code_for_session(raw_code)
+                    sess = supabase.auth.exchange_code_for_session(code)
 
                 if getattr(sess, "session", None) and getattr(sess.session, "access_token", None):
-                    st.session_state["supabase_token"] = sess.session.access_token
+                    st.session_state.supabase_token = sess.session.access_token
                     got_session = True
                 elif DEBUG:
-                    st.caption("exchange_code_for_session returned no session")
+                    st.caption("exchange_code_for_session returned no session.")
             except Exception as e:
-                if DEBUG: st.caption(f"exchange_code_for_session error: {e}")
-
-        # B) Alte Links (eigene Templates): ?token=… (& token_hash=…)
-        #   -> Manche Setups akzeptieren das Token direkt als 'code'
-        if not got_session and raw_token:
-            try:
-                try:
-                    sess = supabase.auth.exchange_code_for_session({"auth_code": raw_token})
-                except TypeError:
-                    sess = supabase.auth.exchange_code_for_session(raw_token)
-
-                if getattr(sess, "session", None) and getattr(sess.session, "access_token", None):
-                    st.session_state["supabase_token"] = sess.session.access_token
-                    got_session = True
-                elif DEBUG:
-                    st.caption("token fallback returned no session")
-            except Exception as e:
-                if DEBUG: st.caption(f"token fallback error: {e}")
+                if DEBUG:
+                    st.caption(f"exchange_code_for_session error: {e}")
 
         if not got_session:
             st.error("The link may be invalid or expired. Please request a new reset link.")
             st.markdown("[Request a new link](/?view=forgot_password)")
             st.stop()
 
-    # 2) Passwort setzen
+    # 4) Neues Passwort setzen
     with st.form("reset_form"):
         p1 = st.text_input("New password", type="password", key="rp1")
         p2 = st.text_input("Confirm new password", type="password", key="rp2")
@@ -1683,7 +1675,8 @@ if view == "reset_password":
             st.markdown("[Go to login](/?view=login)")
             st.stop()
         except Exception as e:
-            if DEBUG: st.caption(f"update_user error: {e}")
+            if DEBUG:
+                st.caption(f"update_user error: {e}")
             st.error("Could not update password. The link may be invalid or expired.")
             st.markdown("[Request a new link](/?view=forgot_password)")
             st.stop()
