@@ -21,6 +21,25 @@ load_dotenv()
 # === Streamlit Page Config ===
 st.set_page_config(page_title="InsightFundamental", layout="wide")
 
+# --- Supabase Recovery: #access_token aus dem Hash in Query übertragen ---
+import streamlit.components.v1 as components
+components.html("""
+<script>
+try {
+  const h = window.location.hash;
+  if (h && h.includes("type=recovery") && h.includes("access_token")) {
+    const p = new URLSearchParams(h.substring(1));
+    const q = new URLSearchParams(window.location.search);
+    ["access_token","type","refresh_token"].forEach(k=>{
+      const v=p.get(k); if(v) q.set(k,v);
+    });
+    const url = `${window.location.pathname}?${q.toString()}`;
+    window.history.replaceState(null,"",url);
+  }
+} catch(e) {}
+</script>
+""", height=0)
+
 # === Basis-Konfiguration / Secrets ===
 SMTP_SERVER = os.getenv("SMTP_SERVER")
 SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
@@ -109,69 +128,65 @@ def insert_user_to_supabase(email: str, pwd_hash: str):
         return False, str(e)
 
 # ---- Access helpers (paid + trial) ----
-def _fetch_user_flags(email: str) -> dict | None:
+def ensure_trial_row(email: str) -> dict | None:
     """
-    Holt subscription_active und trial_until aus public.profiles (nicht mehr users!)
-    für die angegebene E-Mail (Kleinschreibung!).
+    Stellt sicher, dass in public.users ein Datensatz für die E-Mail existiert
+    und 'trial_until' gesetzt ist. Gibt die Flags zurück.
     """
     if supabase is None or not email:
         return None
+    email = email.strip().lower()
     try:
-        email_norm = (email or "").strip().lower()
-        # Voraussetzung: In profiles existiert eine Spalte 'email'.
-        # (Falls nicht, sagen — dann stellen wir auf Lookup via user_id um.)
+        now = datetime.now(timezone.utc)
+        default_trial = now + timedelta(days=14)
+
+        # Eintrag holen
         res = (
-            supabase.table("profiles")
+            supabase.table("users")
             .select("subscription_active, trial_until")
-            .eq("email", email_norm)
+            .eq("email", email)
             .limit(1)
             .execute()
         )
-        if res.data:
-            return res.data[0]
-    except Exception:
-        pass
-    return None
 
-def _compute_access(flags: dict) -> tuple[bool, str]:
-    """
-    Leitet aus den Flags den Zugriff und den Plan ab:
-      paid  -> subscription_active = True
-      trial -> trial_until > now()
-      free  -> sonst
-    Rückgabe: (has_access, plan_str)
-    """
-    # 1) Bezahlt
-    if bool(flags.get("subscription_active")):
-        return True, "paid"
+        # Falls kein Eintrag: anlegen mit Trial
+        if not res.data:
+            ins = supabase.table("users").insert({
+                "email": email,
+                "pwd": "",
+                "subscription_active": False,
+                "trial_until": default_trial.isoformat()
+            }).execute()
+            return ins.data[0] if ins.data else {"subscription_active": False, "trial_until": default_trial.isoformat()}
 
-    # 2) Trial prüfen
-    trial_until = flags.get("trial_until")
-    if trial_until:
-        try:
-            from datetime import datetime, timezone
-            # ISO-String -> datetime
-            if isinstance(trial_until, str):
-                trial_dt = datetime.fromisoformat(trial_until.replace("Z", "+00:00"))
+        row = res.data[0]
+
+        # Falls Trial fehlt: setzen
+        if not row.get("trial_until"):
+            upd = (
+                supabase.table("users")
+                .update({"trial_until": default_trial.isoformat()})
+                .eq("email", email)
+                .execute()
+            )
+            if upd.data:
+                row = upd.data[0]
             else:
-                trial_dt = trial_until
-            now = datetime.now(timezone.utc)
-            if trial_dt.tzinfo is None:
-                trial_dt = trial_dt.replace(tzinfo=timezone.utc)
-            if trial_dt > now:
-                return True, "trial"
-        except Exception:
-            pass
+                row["trial_until"] = default_trial.isoformat()
 
-    # 3) Kein Zugriff
-    return False, "free"
+        return row
+    except Exception as e:
+        st.warning(f"ensure_trial_row error: {e}")
+        return None
+
 
 def refresh_subscription_status():
     """
     Aktualisiert den Session-Status:
       - state.access_granted (True/False)
       - state.user_plan ('paid'|'trial'|'free')
-      - state.subscription_active (nur für bezahlte Abos True, sonst False)
+      - state.subscription_active (True nur bei echten Zahlungen)
+    Quelle: public.users (subscription_active, trial_until)
     """
     try:
         state = st.session_state
@@ -182,17 +197,40 @@ def refresh_subscription_status():
             state.subscription_active = False
             return
 
-        flags = _fetch_user_flags(email) or {}
-        has_access, plan = _compute_access(flags)
+        flags = ensure_trial_row(email) or {}
 
-        state.access_granted = has_access
-        state.user_plan = plan
-        # echter DB-Flag für paid; bei trial bleibt False
-        state.subscription_active = bool(flags.get("subscription_active", False))
+        # paid?
+        if bool(flags.get("subscription_active")):
+            state.access_granted = True
+            state.user_plan = "paid"
+            state.subscription_active = True
+            return
+
+        # trial?
+        trial_until = flags.get("trial_until")
+        if trial_until:
+            try:
+                if isinstance(trial_until, str):
+                    t = datetime.fromisoformat(trial_until.replace("Z", "+00:00"))
+                else:
+                    t = trial_until
+                if t.tzinfo is None:
+                    t = t.replace(tzinfo=timezone.utc)
+                if t > datetime.now(timezone.utc):
+                    state.access_granted = True
+                    state.user_plan = "trial"
+                    state.subscription_active = False
+                    return
+            except Exception:
+                pass
+
+        # free
+        state.access_granted = False
+        state.user_plan = "free"
+        state.subscription_active = False
     except Exception as e:
         st.warning(f"Refresh error: {e}")
 
-# === Access-Guard: nur für eingeloggte + (paid ODER aktive Trial) ===
 def require_access():
     # eingeloggt?
     if not st.session_state.get("logged_in"):
@@ -200,36 +238,34 @@ def require_access():
         st.markdown("[Go to login](/?view=login)")
         st.stop()
 
-    # Flags sicher aktualisieren (liest users.subscription_active / trial_until)
+    # Flags aktualisieren
+    refresh_subscription_status()
+
+    # Zugriff?
+    if not st.session_state.get("access_granted", False):
+        st.error("You need an active subscription or a valid trial to access this page.")
+        st.markdown("[Start 14-day free trial now](/?view=pricing)")
+        st.stop()
+
+def require_access():
+    """
+    Guard für geschützte Seiten:
+    - zwingt Login
+    - erlaubt Zugriff bei paid ODER aktiver Trial
+    """
+    # Eingeloggt?
+    if not st.session_state.get("logged_in"):
+        st.info("Please log in to access this page.")
+        st.markdown("[Go to login](/?view=login)")
+        st.stop()
+
+    # Flags aktualisieren
     refresh_subscription_status()
 
     # Zugriff prüfen
     if not st.session_state.get("access_granted", False):
         st.error("You need an active subscription or a valid trial to access this page.")
         st.markdown("[Start 14-day free trial now](/?view=pricing)")
-        st.stop()
-
-# === 🔒 Guard für geschützte Seiten (NEU) ===
-def require_access():
-    """
-    Sichert bezahlte/Trial-Seiten ab.
-    - leitet Nicht-Eingeloggte zum Login
-    - blockiert Nutzer ohne aktives Abo & ohne laufende Trial
-    """
-    # immer frisch holen (falls Login/Logout gerade passiert ist)
-    refresh_subscription_status()
-    s = st.session_state
-
-    # nicht eingeloggt?
-    if not s.get("logged_in"):
-        st.info("Please log in to continue.")
-        redirect_to("login")
-        st.stop()
-
-    # kein Zugriff (weder paid noch aktive Trial)?
-    if not s.get("access_granted"):
-        st.warning("Your trial has ended or no active subscription.")
-        st.markdown("[Start free trial or manage subscription](/?view=register)")
         st.stop()
 
 # === Forgot-Password: Helper (falls noch benötigt) ===
@@ -1132,9 +1168,7 @@ if view == "landing":
 
 # === Platzhalter für andere Views ===
 elif view == "news-analysis":
-    # Zugriff: eingeloggt + (paid ODER aktive Trial)
     require_access()
-
     st.markdown("<style>.block-container {padding-top: 0.5rem !important;}</style>", unsafe_allow_html=True)
     st.title("News Analysis")
     st.write("Hier erscheinen später die analysierten Nachrichten.")
@@ -1548,104 +1582,56 @@ if view == "forgot_password":
             st.error("Please enter your email.")
             st.stop()
 
-        # Fürs Debuggen ggf. auf True stellen
-        DEBUG_RECOVER = False
-
         try:
-            import requests
-            RECOVER_URL = f"{SUPABASE_URL}/auth/v1/recover"
-            headers = {
-                "apikey": SUPABASE_ANON_KEY,                       # ← Anon Key!
-                "Authorization": f"Bearer {SUPABASE_ANON_KEY}",    # ← Anon Key!
-                "Content-Type": "application/json",
-            }
-            params = {"redirect_to": f"{APP_BASE_URL}/?view=reset_password"}
-            r = requests.post(RECOVER_URL, headers=headers, json={"email": email_norm}, params=params, timeout=15)
-
-            if DEBUG_RECOVER:
-                st.caption(f"recover status={r.status_code} body={r.text[:200]}")
-
-            # Immer gleiche Meldung nach außen (kein User-Enumeration)
+            # Supabase: Recovery-Mail versenden
+            supabase.auth.reset_password_for_email(
+                email_norm,
+                options={"redirect_to": f"{APP_BASE_URL}/?view=reset_password"}
+            )
+            # Supabase antwortet 200/204 ohne weitere Details – immer neutrale Meldung zeigen
             st.success("If an account exists for this email, a reset link has been sent.")
-        except Exception as e:
-            if DEBUG_RECOVER:
-                st.caption(f"recover exception: {e}")
+        except Exception:
             st.success("If an account exists for this email, a reset link has been sent.")
 
         st.markdown("[Back to login](/?view=login)")
         st.stop()
 
-# === Reset Password (Supabase Auth) ===
-if view == "reset_password":
-    st.markdown("## Choose a new password")
+# === Reset Password (über Supabase Auth-Link) ===
+elif view == "reset_password":
+    st.markdown("## Set a new password")
 
-    new1 = st.text_input("New password", type="password", key="rp1")
-    new2 = st.text_input("Confirm new password", type="password", key="rp2")
-    clicked = st.button("Set new password")
-
-    if clicked:
-        # Token aus URL lesen (Supabase schickt je nach Template token oder token_hash)
-        token = st.query_params.get("token") or st.query_params.get("token_hash")
-        email_param = st.query_params.get("email", "")
-
-        if not token:
+    # Supabase schickt je nach Flow einen ?code=... (PKCE) oder ist direkt schon "eingeloggt".
+    # Falls ein Code vorhanden ist: in eine Session tauschen.
+    code = st.query_params.get("code")
+    if code:
+        try:
+            supabase.auth.exchange_code_for_session({"auth_code": code})
+        except Exception:
+            # Wenn der Code bereits benutzt/abgelaufen ist, fällt das hier auf.
             st.error("Reset failed. The link may be invalid or expired. Please request a new reset link.")
+            st.markdown("[Request a new link](/?view=forgot_password)")
             st.stop()
+
+    # Formular zum Setzen des neuen Passworts
+    with st.form("reset_form"):
+        new1 = st.text_input("New password", type="password")
+        new2 = st.text_input("Confirm new password", type="password")
+        sub  = st.form_submit_button("Update password")
+
+    if sub:
         if not new1 or new1 != new2:
-            st.error("Passwords must match.")
+            st.error("Passwords do not match.")
             st.stop()
-
-        DEBUG_RESET = False  # für Diagnose auf True setzen
-
-        # 1) Token verifizieren -> Access Token holen
-        access_token = None
         try:
-            import requests
-            verify_url = f"{SUPABASE_URL}/auth/v1/verify"
-            headers = {
-                "apikey": SUPABASE_ANON_KEY,                       # ← Anon Key verwenden
-                "Authorization": f"Bearer {SUPABASE_ANON_KEY}",    # ← Anon Key verwenden
-                "Content-Type": "application/json",
-            }
-            payload = {"type": "recovery", "token": token}
-            if email_param:
-                payload["email"] = email_param
-
-            rv = requests.post(verify_url, headers=headers, json=payload, timeout=15)
-            if DEBUG_RESET:
-                st.caption(f"/verify → {rv.status_code} | {rv.text[:200]}")
-            if rv.status_code == 200 and rv.json():
-                access_token = rv.json().get("access_token")
-        except Exception as e:
-            if DEBUG_RESET:
-                st.caption(f"/verify exception: {e}")
-
-        if not access_token:
-            st.error("Reset failed. The link may be invalid or expired. Please request a new reset link.")
+            # Wichtig: update_user setzt das Passwort für den aktuell authentifizierten User
+            supabase.auth.update_user({"password": new1})
+            st.success("Password updated. You can now log in with your new password.")
+            st.markdown("[Back to login](/?view=login)")
             st.stop()
-
-        # 2) Neues Passwort setzen
-        try:
-            upd_url = f"{SUPABASE_URL}/auth/v1/user"
-            upd_headers = {
-                "apikey": SUPABASE_ANON_KEY,                # ← Anon Key
-                "Authorization": f"Bearer {access_token}",  # ← Access Token aus /verify
-                "Content-Type": "application/json",
-            }
-            ru = requests.put(upd_url, headers=upd_headers, json={"password": new1}, timeout=15)
-            if DEBUG_RESET:
-                st.caption(f"/user → {ru.status_code} | {ru.text[:200]}")
-
-            if ru.status_code == 200:
-                st.success("Password updated. You can now log in.")
-                st.markdown("[Back to login](/?view=login)")
-                st.stop()
-        except Exception as e:
-            if DEBUG_RESET:
-                st.caption(f"/user exception: {e}")
-
-        st.error("Could not set password. Please request a new reset link and try again.")
-        st.stop()
+        except Exception:
+            st.error("Could not update password. The link may be invalid or expired.")
+            st.markdown("[Request a new link](/?view=forgot_password)")
+            st.stop()
 
 # === Registration ===
 if view == "register":
